@@ -2,7 +2,7 @@ import { User, WorkoutPlan, DateWorkoutPlan, DateWorkout, RecurringType, Exercis
 import { formatGMTDateToISO, getCurrentGMTDate } from '../utils/dateUtils';
 
 // Base URL for API requests
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE_URL = 'https://karyde.com/gym';
 
 // Helper function for making authenticated API requests
 const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
