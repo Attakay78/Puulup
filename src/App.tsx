@@ -8,6 +8,7 @@ import SignIn from './pages/SignIn';
 import Dashboard from './pages/Dashboard';
 import CreatePlan from './pages/CreatePlan';
 import Profile from './pages/Profile';
+import Workouts from './pages/Workouts';
 import { Home as HomeIcon, Dumbbell, User, LayoutDashboard } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
 import { useEffect } from 'react';
@@ -58,6 +59,14 @@ const AppContent = () => {
             } 
           />
           <Route 
+            path="/workouts" 
+            element={
+              <ProtectedRoute>
+                <Workouts />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
             path="/profile" 
             element={
               <ProtectedRoute>
@@ -92,9 +101,9 @@ const AppContent = () => {
             </Link>
             
             <Link 
-              to="/create-plan" 
+              to="/workouts" 
               className={`flex flex-col items-center justify-center w-1/4 py-2 ${
-                pathname === '/create-plan' ? 'text-primary' : 'text-light-dark'
+                pathname === '/workouts' ? 'text-primary' : 'text-light-dark'
               }`}
             >
               <Dumbbell size={20} />

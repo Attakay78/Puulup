@@ -41,7 +41,7 @@ const Navbar: React.FC = () => {
                   Dashboard
                 </Link>
                 <Link 
-                  to="/create-plan" 
+                  to="/workouts" 
                   className="text-light hover:text-primary transition-colors"
                   onClick={() => window.scrollTo(0, 0)}
                 >

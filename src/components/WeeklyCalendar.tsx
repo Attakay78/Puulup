@@ -24,12 +24,10 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({ weekStart, workouts, on
   
   const goToPreviousWeek = () => {
     onWeekChange(addDays(weekStart, -7));
-    setSelectedDay(null); // Reset selected day when changing weeks
   };
   
   const goToNextWeek = () => {
     onWeekChange(addDays(weekStart, 7));
-    setSelectedDay(null); // Reset selected day when changing weeks
   };
   
   // Get workout for a specific date
@@ -51,10 +49,8 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({ weekStart, workouts, on
   
   // Handle day selection
   const handleDaySelect = (date: Date) => {
-    if (selectedDay && isSameGMTDay(date, selectedDay)) {
-      // If clicking the same day, toggle off
-      setSelectedDay(null);
-    } else {
+    // Only update if selecting a different day
+    if (!selectedDay || !isSameGMTDay(date, selectedDay)) {
       setSelectedDay(date);
     }
   };
@@ -99,7 +95,7 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({ weekStart, workouts, on
         </div>
       </div>
       
-      <div className="grid grid-cols-7 gap-1 sm:gap-2 p-2 sm:p-4">
+      <div className="grid grid-cols-7 gap-1 sm:gap-2 p-2 sm:p-4 mb-4">
         {days.map(day => {
           const hasWorkout = !!getWorkoutForDate(day);
           const dayAbbr = format(day, 'EEE');
@@ -133,7 +129,7 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({ weekStart, workouts, on
       
       {/* Show workout details only for selected day */}
       {selectedDay && (
-        <div className="border-t border-dark">
+        <div className="border-t border-dark mt-2">
           {(() => {
             const workout = getWorkoutForDate(selectedDay);
             const hasWorkout = !!workout;
@@ -146,7 +142,7 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({ weekStart, workouts, on
                   isToday(selectedDay) ? 'bg-primary bg-opacity-10' : hasWorkout ? 'bg-dark' : ''
                 }`}
               >
-                <div className="flex justify-between items-center mb-2">
+                <div className="flex justify-between items-center mb-4">
                   <h4 className="font-medium text-sm sm:text-base text-light">{dayName} <span className="text-light-dark text-xs">({dateDisplay})</span></h4>
                   {hasWorkout ? (
                     <div className="flex items-center space-x-2">
@@ -173,7 +169,7 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({ weekStart, workouts, on
                 </div>
                 
                 {hasWorkout && (
-                  <div className="space-y-2 sm:space-y-3 mt-2 sm:mt-3">
+                  <div className="space-y-2 sm:space-y-3">
                     {workout.exercises.map((exercise, index) => (
                       <div key={index} className="exercise-card flex items-center">
                         <div className="mr-2 sm:mr-3 bg-primary bg-opacity-20 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center">
@@ -216,7 +212,7 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({ weekStart, workouts, on
       
       {/* Instructions when no day is selected */}
       {!selectedDay && (
-        <div className="border-t border-dark p-4 text-center">
+        <div className="border-t border-dark p-4 text-center mt-2">
           <p className="text-light-dark text-sm">
             Select a day to view workout details
           </p>
