@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Dumbbell, LogOut } from 'lucide-react';
+import { Dumbbell, LogOut, User } from 'lucide-react';
 
 const Navbar: React.FC = () => {
   const { isAuthenticated, logout, user } = useAuth();
@@ -12,27 +12,17 @@ const Navbar: React.FC = () => {
         <div className="flex justify-between items-center">
           <Link 
             to="/" 
-            className="flex items-center space-x-2 text-xl font-bold text-primary"
+            className="flex items-center space-x-2"
             onClick={() => window.scrollTo(0, 0)}
           >
             <Dumbbell size={28} className="text-primary" />
-            <span>PuulUp</span>
+            <span className="logo-text text-xl text-primary">Puulup</span>
           </Link>
           
           {/* Desktop navigation */}
           <div className="hidden md:flex items-center space-x-6">
             {isAuthenticated ? (
               <>
-                <div className="flex items-center space-x-3">
-                  {user?.profileImage && (
-                    <img 
-                      src={user.profileImage} 
-                      alt={user.name} 
-                      className="w-10 h-10 rounded-full object-cover border-2 border-primary"
-                    />
-                  )}
-                  <span className="font-medium text-light">{user?.name}</span>
-                </div>
                 <Link 
                   to="/dashboard" 
                   className="text-light hover:text-primary transition-colors"
@@ -47,13 +37,27 @@ const Navbar: React.FC = () => {
                 >
                   Workouts
                 </Link>
-                <button 
-                  onClick={logout} 
-                  className="flex items-center space-x-1 text-secondary hover:text-secondary-light transition-colors"
-                >
-                  <LogOut size={18} />
-                  <span>Logout</span>
-                </button>
+                <div className="flex items-center space-x-3">
+                  <button 
+                    onClick={logout} 
+                    className="text-secondary hover:text-secondary-light transition-colors"
+                  >
+                    <LogOut size={18} />
+                  </button>
+                  <div className="flex items-center">
+                    {user?.profileImage ? (
+                      <img 
+                        src={user.profileImage} 
+                        alt={user.name} 
+                        className="w-8 h-8 rounded-full object-cover border-2 border-primary"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-primary bg-opacity-20 flex items-center justify-center">
+                        <User size={16} className="text-primary" />
+                      </div>
+                    )}
+                  </div>
+                </div>
               </>
             ) : (
               <>
@@ -72,6 +76,25 @@ const Navbar: React.FC = () => {
                   Sign Up
                 </Link>
               </>
+            )}
+          </div>
+
+          {/* Mobile navigation */}
+          <div className="md:hidden flex items-center">
+            {isAuthenticated && (
+              <div className="flex items-center">
+                {user?.profileImage ? (
+                  <img 
+                    src={user.profileImage} 
+                    alt={user.name} 
+                    className="w-8 h-8 rounded-full object-cover border-2 border-primary"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-primary bg-opacity-20 flex items-center justify-center">
+                    <User size={16} className="text-primary" />
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

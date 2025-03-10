@@ -20,6 +20,13 @@
     @apply font-sans tracking-tight;
   }
 
+  .logo-text {
+    font-family: 'Roboto', sans-serif;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
   /* Custom select styling */
   select {
     @apply cursor-pointer;
