@@ -46,38 +46,38 @@ const SignIn: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-dark flex flex-col justify-center py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
+    <div className="fixed inset-0 bg-dark flex flex-col justify-center px-4 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
-          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-instagram-gradient flex items-center justify-center">
-            <Dumbbell className="h-7 w-7 sm:h-8 sm:w-8 text-white" />
+          <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-instagram-gradient flex items-center justify-center">
+            <Dumbbell className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
           </div>
         </div>
-        <h2 className="mt-4 sm:mt-6 text-center text-2xl sm:text-3xl font-bold text-light">
+        <h2 className="mt-3 sm:mt-6 text-center text-xl sm:text-3xl font-bold text-light">
           Welcome Back
         </h2>
-        <p className="mt-2 text-center text-xs sm:text-sm text-light-dark">
+        <p className="mt-1 sm:mt-2 text-center text-xs sm:text-sm text-light-dark">
           Sign in to continue your fitness journey
         </p>
       </div>
 
-      <div className="mt-6 sm:mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+      <div className="mt-4 sm:mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="card">
           {message && (
-            <div className="mb-4 sm:mb-6 bg-green-900 bg-opacity-20 border border-green-500 text-green-400 px-3 sm:px-4 py-2 sm:py-3 rounded-xl text-xs sm:text-sm">
+            <div className="mb-3 sm:mb-6 bg-green-900 bg-opacity-20 border border-green-500 text-green-400 px-3 py-2 rounded-xl text-xs">
               {message}
             </div>
           )}
           
           {error && (
-            <div className="mb-4 sm:mb-6 bg-red-900 bg-opacity-20 border border-red-500 text-red-400 px-3 sm:px-4 py-2 sm:py-3 rounded-xl text-xs sm:text-sm">
+            <div className="mb-3 sm:mb-6 bg-red-900 bg-opacity-20 border border-red-500 text-red-400 px-3 py-2 rounded-xl text-xs">
               {error}
             </div>
           )}
           
-          <form className="space-y-4 sm:space-y-6" onSubmit={handleSubmit}>
+          <form className="space-y-3 sm:space-y-6" onSubmit={handleSubmit}>
             <div>
-              <label htmlFor="email" className="block text-xs sm:text-sm font-medium text-light mb-1">
+              <label htmlFor="email" className="block text-xs font-medium text-light mb-1">
                 Email address
               </label>
               <div className="relative">
@@ -92,14 +92,14 @@ const SignIn: React.FC = () => {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="input-field pl-10 text-sm"
+                  className="input-field pl-10 text-sm py-2.5"
                   placeholder="you@example.com"
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-xs sm:text-sm font-medium text-light mb-1">
+              <label htmlFor="password" className="block text-xs font-medium text-light mb-1">
                 Password
               </label>
               <div className="relative">
@@ -114,7 +114,7 @@ const SignIn: React.FC = () => {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="input-field pl-10 pr-10 text-sm"
+                  className="input-field pl-10 pr-10 text-sm py-2.5"
                   placeholder="••••••••"
                 />
                 <button
@@ -131,7 +131,7 @@ const SignIn: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="bg-instagram-gradient w-full flex justify-center items-center text-sm px-6 py-3 rounded-xl font-medium transition-all duration-200 text-white"
+                className="bg-instagram-gradient w-full flex justify-center items-center text-sm px-6 py-2.5 rounded-xl font-medium transition-all duration-200 text-white"
               >
                 {isLoading ? (
                   <>
@@ -148,7 +148,7 @@ const SignIn: React.FC = () => {
             </div>
             
             <div className="text-center">
-              <p className="text-xs sm:text-sm text-light-dark">
+              <p className="text-xs text-light-dark">
                 Don't have an account?{' '}
                 <Link to="/signup" className="font-medium text-primary hover:text-primary-light">
                   Sign up

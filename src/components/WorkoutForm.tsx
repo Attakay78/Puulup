@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { format, parseISO } from 'date-fns';
 import { DateWorkout, Exercise, RecurringType } from '../types';
-import { Plus, X, Dumbbell, Clock, Edit, Save, Repeat } from 'lucide-react';
+import { Plus, X, Dumbbell, Clock, Edit, Save, Repeat, ArrowRight } from 'lucide-react';
 import Calendar from './Calendar';
 import { formatGMTDate, formatGMTDateToISO, getCurrentGMTDate } from '../utils/dateUtils';
 
@@ -230,8 +230,20 @@ const WorkoutForm: React.FC<WorkoutFormProps> = ({
     <div className="bg-dark-light rounded-2xl shadow-md overflow-hidden">
       <form onSubmit={handleSubmit} className="p-4 sm:p-6">
         {currentStep === 1 && (
-          <div className="mb-8">
+          <div>
             <h3 className="text-lg font-semibold mb-4 text-light">Select Workout Dates</h3>
+            
+            {/* Mobile Next Button - Only visible on mobile */}
+            <div className="sm:hidden mb-4">
+              <button
+                type="button"
+                className="btn-primary w-full flex items-center justify-center"
+                onClick={goToNextStep}
+              >
+                <span>Next: Add Exercises</span>
+                <ArrowRight size={16} className="ml-2" />
+              </button>
+            </div>
             
             <div className="max-w-md mx-auto">
               <Calendar 
@@ -252,13 +264,15 @@ const WorkoutForm: React.FC<WorkoutFormProps> = ({
               </p>
             </div>
             
-            <div className="mt-8 flex justify-end">
+            {/* Desktop Next Button - Hidden on mobile */}
+            <div className="hidden sm:flex mt-8 justify-end">
               <button
                 type="button"
-                className="btn-primary w-full sm:w-auto"
+                className="btn-primary w-full sm:w-auto flex items-center justify-center"
                 onClick={goToNextStep}
               >
-                Next: Add Exercises
+                <span>Next: Add Exercises</span>
+                <ArrowRight size={16} className="ml-2" />
               </button>
             </div>
           </div>
