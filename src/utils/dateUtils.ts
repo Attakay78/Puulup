@@ -2,12 +2,9 @@ import { format, parseISO, addDays, addWeeks, addMonths, isSameDay } from 'date-
 
 /**
  * Gets the current date
- * Hard-coded to March 2nd, 2025 (Sunday) for consistency
  */
 export const getCurrentGMTDate = (): Date => {
-  // Create a new date object for March 2nd, 2025 (Sunday)
-  // Using direct year/month/day values to ensure correctness
-  return new Date(2025, 2, 2);
+  return new Date();
 };
 
 /**

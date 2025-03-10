@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getWorkoutPlan, getWorkoutsForDateRange } from '../api';
 import { DateWorkout, WeekRange } from '../types';
-import { Plus, Calendar, User, Activity, Dumbbell, Clock } from 'lucide-react';
+import { Calendar, Dumbbell, Clock, Activity, User } from 'lucide-react';
 import { startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import WeeklyCalendar from '../components/WeeklyCalendar';
 import { formatGMTDate, formatGMTDateToISO, getCurrentGMTDate } from '../utils/dateUtils';
@@ -175,7 +175,7 @@ const Dashboard: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
               {/* Sidebar - Hidden on mobile, shown in menu instead */}
               <div className="lg:col-span-1 order-2 lg:order-1 hidden lg:block">
-                <div className="card mb-4 sm:mb-6">
+                <div className="card">
                   <div className="flex items-center space-x-3 sm:space-x-4 mb-4 sm:mb-6">
                     {user?.profileImage ? (
                       <img 
@@ -198,19 +198,6 @@ const Dashboard: React.FC = () => {
                     <h3 className="font-medium mb-1 sm:mb-2 text-light text-sm sm:text-base">Contact</h3>
                     <p className="text-xs sm:text-sm text-light-dark truncate">{user?.contact}</p>
                   </div>
-                </div>
-                
-                <div className="card">
-                  <h3 className="font-medium mb-3 sm:mb-4 text-light text-sm sm:text-base">Quick Actions</h3>
-                  <Link 
-                    to="/create-plan" 
-                    className="flex items-center space-x-2 text-primary hover:text-primary-light transition-colors text-sm sm:text-base"
-                    onClick={() => window.scrollTo(0, 0)}
-                  >
-                    <Plus size={16} className="sm:hidden" />
-                    <Plus size={18} className="hidden sm:block" />
-                    <span>{workoutPlan.length ? 'Update' : 'Create'} Workout Plan</span>
-                  </Link>
                 </div>
               </div>
               
@@ -280,19 +267,6 @@ const Dashboard: React.FC = () => {
                   </div>
                 )}
                 
-                {/* Quick Action for Mobile */}
-                <div className="card mb-4 sm:mb-6 lg:hidden">
-                  <h3 className="font-medium mb-3 text-light text-sm sm:text-base">Quick Actions</h3>
-                  <Link 
-                    to="/create-plan" 
-                    className="flex items-center space-x-2 text-primary hover:text-primary-light transition-colors text-sm"
-                    onClick={() => window.scrollTo(0, 0)}
-                  >
-                    <Plus size={16} />
-                    <span>{workoutPlan.length ? 'Update' : 'Create'} Workout Plan</span>
-                  </Link>
-                </div>
-                
                 {/* Weekly Calendar View */}
                 <div className="card">
                   <div className="flex justify-between items-center mb-4 sm:mb-6">
@@ -330,7 +304,6 @@ const Dashboard: React.FC = () => {
                         className="bg-instagram-gradient inline-flex items-center px-4 py-2 rounded-xl text-xs sm:text-sm font-medium text-light"
                         onClick={() => window.scrollTo(0, 0)}
                       >
-                        <Plus size={16} className="mr-1 sm:mr-2" />
                         Create Workout Plan
                       </Link>
                     </div>

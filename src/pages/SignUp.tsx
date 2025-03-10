@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { signup } from '../api';
-import { User, Mail, Phone, Lock, Upload, X, Dumbbell } from 'lucide-react';
+import { User, Mail, Phone, Lock, Upload, X, Dumbbell, Eye, EyeOff } from 'lucide-react';
 
 const SignUp: React.FC = () => {
   const navigate = useNavigate();
@@ -15,6 +15,8 @@ const SignUp: React.FC = () => {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -191,16 +193,23 @@ const SignUp: React.FC = () => {
                 <input
                   id="password"
                   name="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   autoComplete="new-password"
                   required
                   value={formData.password}
                   onChange={handleChange}
-                  className={`input-field pl-10 text-sm ${
+                  className={`input-field pl-10 pr-10 text-sm ${
                     errors.password ? 'border-red-500' : 'border-dark'
                   }`}
                   placeholder="••••••••"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-light-dark hover:text-light transition-colors"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
                 {errors.password && (
                   <p className="mt-1 text-xs text-red-400">{errors.password}</p>
                 )}
@@ -218,16 +227,23 @@ const SignUp: React.FC = () => {
                 <input
                   id="confirmPassword"
                   name="confirmPassword"
-                  type="password"
+                  type={showConfirmPassword ? "text" : "password"}
                   autoComplete="new-password"
                   required
                   value={formData.confirmPassword}
                   onChange={handleChange}
-                  className={`input-field pl-10 text-sm ${
+                  className={`input-field pl-10 pr-10 text-sm ${
                     errors.confirmPassword ? 'border-red-500' : 'border-dark'
                   }`}
                   placeholder="••••••••"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-light-dark hover:text-light transition-colors"
+                >
+                  {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
                 {errors.confirmPassword && (
                   <p className="mt-1 text-xs text-red-400">{errors.confirmPassword}</p>
                 )}

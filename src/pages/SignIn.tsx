@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogIn, User, Lock, Dumbbell } from 'lucide-react';
+import { LogIn, User, Lock, Dumbbell, Eye, EyeOff } from 'lucide-react';
 
 interface LocationState {
   message?: string;
@@ -15,6 +15,7 @@ const SignIn: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   
   const state = location.state as LocationState;
   const message = state?.message;
@@ -38,6 +39,10 @@ const SignIn: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
   };
 
   return (
@@ -104,14 +109,21 @@ const SignIn: React.FC = () => {
                 <input
                   id="password"
                   name="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="input-field pl-10 text-sm"
+                  className="input-field pl-10 pr-10 text-sm"
                   placeholder="••••••••"
                 />
+                <button
+                  type="button"
+                  onClick={togglePasswordVisibility}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-light-dark hover:text-light transition-colors"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
             </div>
 
@@ -142,51 +154,6 @@ const SignIn: React.FC = () => {
                   Sign up
                 </Link>
               </p>
-            </div>
-            
-            {/* Demo accounts */}
-            <div className="mt-4 sm:mt-6">
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-dark" />
-                </div>
-                <div className="relative flex justify-center text-xs sm:text-sm">
-                  <span className="px-2 bg-dark-light text-light-dark">Demo accounts</span>
-                </div>
-              </div>
-              
-              <div className="mt-4 sm:mt-6 grid grid-cols-1 gap-2 sm:gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail('john@example.com');
-                    setPassword('password123');
-                  }}
-                  className="w-full inline-flex justify-center py-2 px-3 sm:px-4 border border-dark rounded-xl shadow-sm bg-dark text-xs sm:text-sm font-medium text-light hover:bg-dark-light transition-colors"
-                >
-                  John Doe (john@example.com)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail('jane@example.com');
-                    setPassword('password123');
-                  }}
-                  className="w-full inline-flex justify-center py-2 px-3 sm:px-4 border border-dark rounded-xl shadow-sm bg-dark text-xs sm:text-sm font-medium text-light hover:bg-dark-light transition-colors"
-                >
-                  Jane Smith (jane@example.com)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail('alex@example.com');
-                    setPassword('password123');
-                  }}
-                  className="w-full inline-flex justify-center py-2 px-3 sm:px-4 border border-dark rounded-xl shadow-sm bg-dark text-xs sm:text-sm font-medium text-light hover:bg-dark-light transition-colors"
-                >
-                  Alex Lee (alex@example.com)
-                </button>
-              </div>
             </div>
           </form>
         </div>
