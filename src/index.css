@@ -11,6 +11,7 @@
 
   /* Custom select styling */
   select {
+    @apply cursor-pointer;
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
@@ -24,19 +25,30 @@
   select::-ms-expand {
     display: none;
   }
+
+  /* Custom number input styling */
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
 }
 
 @layer components {
   .btn {
-    @apply px-6 py-3 rounded-xl font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-opacity-50;
+    @apply px-6 py-3 rounded-xl font-medium transition-all duration-200 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-opacity-50;
   }
   
   .btn-primary {
-    @apply btn bg-primary text-light hover:bg-primary-dark focus:ring-primary;
+    @apply btn bg-primary text-light shadow-button hover:bg-primary-dark focus:ring-primary;
   }
   
   .btn-secondary {
-    @apply btn bg-secondary text-light hover:bg-secondary-dark focus:ring-secondary;
+    @apply btn bg-secondary text-light shadow-button hover:bg-secondary-dark focus:ring-secondary;
   }
   
   .btn-outline {
@@ -48,11 +60,11 @@
   }
   
   .input-field {
-    @apply w-full px-4 py-3 rounded-xl border border-dark bg-dark text-light focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-20 transition-colors duration-200;
+    @apply w-full px-4 py-3 rounded-xl border border-dark bg-dark text-light focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-20 transition duration-200;
   }
   
   .workout-day-btn {
-    @apply rounded-full flex items-center justify-center font-medium transition-colors duration-200;
+    @apply rounded-full flex items-center justify-center font-medium transition-all duration-200;
   }
   
   .workout-day-btn-active {
@@ -64,15 +76,13 @@
   }
   
   .exercise-card {
-    @apply bg-dark rounded-xl p-4 border border-dark-light hover:border-primary transition-colors duration-200;
+    @apply bg-dark rounded-xl p-4 border border-dark-light hover:border-primary transition-all duration-200;
   }
   
-  /* Add padding to the bottom of the page when mobile navbar is present */
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom, 0);
   }
   
-  /* Mobile responsive classes */
   @media (max-width: 500px) {
     .btn {
       @apply px-4 py-2 text-sm;
@@ -85,33 +95,6 @@
     .input-field {
       @apply px-3 py-2 text-sm;
     }
-  }
-
-  /* Instagram gradient border */
-  .instagram-border-gradient {
-    position: relative;
-    padding: 1px;
-    border-radius: 1rem;
-    background: linear-gradient(45deg, #833AB4, #FD1D1D, #FCAF45);
-  }
-
-  .instagram-border-gradient::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: 1rem;
-    padding: 1px;
-    background: linear-gradient(45deg, #833AB4, #FD1D1D, #FCAF45);
-    -webkit-mask: 
-      linear-gradient(#fff 0 0) content-box, 
-      linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-  }
-
-  .instagram-border-gradient > div {
-    background: #1E1E1E;
-    border-radius: 0.9rem;
   }
 }
 

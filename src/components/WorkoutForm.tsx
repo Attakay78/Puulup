@@ -13,39 +13,6 @@ interface WorkoutFormProps {
   onSave: (workouts: DateWorkout[], customExercises: string[]) => void;
 }
 
-const NumberInput = ({ 
-  value, 
-  onChange, 
-  min = 1,
-  max = 999,
-  label,
-  icon: Icon
-}: { 
-  value: string;
-  onChange: (value: string) => void;
-  min?: number;
-  max?: number;
-  label: string;
-  icon: typeof Dumbbell | typeof Clock;
-}) => {
-  return (
-    <div className="relative">
-      <label className="block text-sm font-medium text-light mb-1.5 flex items-center">
-        <Icon size={18} className="text-primary mr-2" />
-        {label}
-      </label>
-      <input
-        type="number"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="input-field text-sm"
-      />
-    </div>
-  );
-};
-
 const WorkoutForm: React.FC<WorkoutFormProps> = ({ 
   initialWorkouts = [], 
   initialCustomExercises = [],
@@ -68,10 +35,14 @@ const WorkoutForm: React.FC<WorkoutFormProps> = ({
   );
 
   const [exerciseType, setExerciseType] = useState<string>('Bench Press');
+  const [sets, setSets] = useState<number>(3);
+  const [reps, setReps] = useState<number>(10);
+  const [duration, setDuration] = useState<number>(30);
+  const [recurring, setRecurring] = useState<RecurringType>('none');
+  
   const [setsInput, setSetsInput] = useState<string>("3");
   const [repsInput, setRepsInput] = useState<string>("10");
   const [durationInput, setDurationInput] = useState<string>("30");
-  const [recurring, setRecurring] = useState<RecurringType>('none');
   
   const [customExercises, setCustomExercises] = useState<string[]>(initialCustomExercises);
   const [newExerciseName, setNewExerciseName] = useState<string>('');
@@ -81,12 +52,20 @@ const WorkoutForm: React.FC<WorkoutFormProps> = ({
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [exerciseTypeMap, setExerciseTypeMap] = useState<Record<string, 'strength' | 'cardio'>>({});
 
-  const getAllExerciseTypes = () => {
-    return [...DEFAULT_EXERCISE_TYPES, ...customExercises];
-  };
-
   const handleDateSelect = (date: Date) => {
     setSelectedDate(date);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const formattedWorkouts: DateWorkout[] = Object.keys(workouts).map(date => ({
+      date,
+      exercises: workouts[date],
+      recurring: recurringSettings[date] || 'none'
+    }));
+    
+    onSave(formattedWorkouts, customExercises);
   };
 
   const handleAddExercise = () => {
@@ -100,14 +79,6 @@ const WorkoutForm: React.FC<WorkoutFormProps> = ({
       (isCustomExercise && isExerciseStrength(exerciseType));
     
     if (isStrengthExercise) {
-      const sets = parseInt(setsInput);
-      const reps = parseInt(repsInput);
-      
-      if (isNaN(sets) || isNaN(reps) || sets < 1 || reps < 1) {
-        alert('Please enter valid numbers for sets and reps');
-        return;
-      }
-      
       exercise = {
         type: exerciseType,
         sets,
@@ -115,13 +86,6 @@ const WorkoutForm: React.FC<WorkoutFormProps> = ({
         isCustom: isCustomExercise
       };
     } else {
-      const duration = parseInt(durationInput);
-      
-      if (isNaN(duration) || duration < 1) {
-        alert('Please enter a valid duration');
-        return;
-      }
-      
       exercise = {
         type: exerciseType,
         duration,
@@ -162,23 +126,10 @@ const WorkoutForm: React.FC<WorkoutFormProps> = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    const formattedWorkouts: DateWorkout[] = Object.keys(workouts).map(date => ({
-      date,
-      exercises: workouts[date],
-      recurring: recurringSettings[date] || 'none'
-    }));
-    
-    onSave(formattedWorkouts, customExercises);
-  };
-
   const isWeightExercise = (type: string) => {
     if (['Bench Press', 'Squats', 'Deadlift'].includes(type)) {
       return true;
     }
-    
     return customExercises.includes(type) && isExerciseStrength(type);
   };
 
@@ -186,57 +137,62 @@ const WorkoutForm: React.FC<WorkoutFormProps> = ({
     return exerciseTypeMap[exerciseName] === 'strength';
   };
 
-  const handleAddCustomExercise = () => {
-    if (!newExerciseName.trim()) return;
+  const handleSetsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSetsInput(value);
     
-    if ([...DEFAULT_EXERCISE_TYPES, ...customExercises].includes(newExerciseName as any)) {
-      alert('An exercise with this name already exists');
-      return;
-    }
-    
-    const updatedCustomExercises = [...customExercises, newExerciseName];
-    setCustomExercises(updatedCustomExercises);
-    
-    setExerciseTypeMap({
-      ...exerciseTypeMap,
-      [newExerciseName]: newExerciseType
-    });
-    
-    setNewExerciseName('');
-    setShowCustomExerciseForm(false);
-    
-    setExerciseType(newExerciseName);
-  };
-
-  const handleRemoveCustomExercise = (exerciseName: string) => {
-    const updatedCustomExercises = customExercises.filter(name => name !== exerciseName);
-    setCustomExercises(updatedCustomExercises);
-    
-    const updatedTypeMap = { ...exerciseTypeMap };
-    delete updatedTypeMap[exerciseName];
-    setExerciseTypeMap(updatedTypeMap);
-    
-    if (exerciseType === exerciseName) {
-      setExerciseType('Bench Press');
-    }
-    
-    const updatedWorkouts = { ...workouts };
-    Object.keys(updatedWorkouts).forEach(date => {
-      updatedWorkouts[date] = updatedWorkouts[date].filter(ex => ex.type !== exerciseName);
-      
-      if (updatedWorkouts[date].length === 0) {
-        delete updatedWorkouts[date];
-        
-        const newRecurringSettings = { ...recurringSettings };
-        delete newRecurringSettings[date];
-        setRecurringSettings(newRecurringSettings);
+    if (value === '') {
+      setSetsInput('');
+    } else {
+      const numValue = parseInt(value, 10);
+      if (!isNaN(numValue) && numValue > 0) {
+        setSets(numValue);
       }
-    });
-    setWorkouts(updatedWorkouts);
+    }
   };
-
+  
+  const handleRepsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setRepsInput(value);
+    
+    if (value === '') {
+      setRepsInput('');
+    } else {
+      const numValue = parseInt(value, 10);
+      if (!isNaN(numValue) && numValue > 0) {
+        setReps(numValue);
+      }
+    }
+  };
+  
+  const handleDurationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setDurationInput(value);
+    
+    if (value === '') {
+      setDurationInput('');
+    } else {
+      const numValue = parseInt(value, 10);
+      if (!isNaN(numValue) && numValue > 0) {
+        setDuration(numValue);
+      }
+    }
+  };
+  
   const handleRecurringChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setRecurring(e.target.value as RecurringType);
+  };
+  
+  const handleInputBlur = (
+    inputValue: string, 
+    setter: React.Dispatch<React.SetStateAction<number>>,
+    inputSetter: React.Dispatch<React.SetStateAction<string>>,
+    defaultValue: number
+  ) => {
+    if (inputValue === '' || isNaN(parseInt(inputValue, 10)) || parseInt(inputValue, 10) <= 0) {
+      setter(defaultValue);
+      inputSetter(defaultValue.toString());
+    }
   };
 
   const goToNextStep = () => {
@@ -251,12 +207,6 @@ const WorkoutForm: React.FC<WorkoutFormProps> = ({
     }
   };
 
-  const workoutsArray: DateWorkout[] = Object.keys(workouts).map(date => ({
-    date,
-    exercises: workouts[date],
-    recurring: recurringSettings[date] || 'none'
-  }));
-
   const getRecurringDescription = (type: RecurringType): string => {
     switch (type) {
       case 'weekly':
@@ -270,47 +220,14 @@ const WorkoutForm: React.FC<WorkoutFormProps> = ({
     }
   };
 
-  useEffect(() => {
-    const typeMap: Record<string, 'strength' | 'cardio'> = {};
-    
-    initialWorkouts.forEach(workout => {
-      workout.exercises.forEach(exercise => {
-        if (exercise.isCustom && exercise.type) {
-          typeMap[exercise.type] = exercise.sets !== undefined ? 'strength' : 'cardio';
-        }
-      });
-    });
-    
-    setExerciseTypeMap(typeMap);
-  }, [initialWorkouts]);
+  const workoutsArray: DateWorkout[] = Object.keys(workouts).map(date => ({
+    date,
+    exercises: workouts[date],
+    recurring: recurringSettings[date] || 'none'
+  }));
 
   return (
     <div className="bg-dark-light rounded-2xl shadow-md overflow-hidden">
-      <div className="p-4 sm:p-6 bg-primary text-light">
-        <h2 className="text-xl sm:text-2xl font-bold">Create Your Workout Plan</h2>
-        <p className="text-light mt-2 text-sm sm:text-base">
-          Select dates and add exercises to create a personalized fitness routine.
-        </p>
-      </div>
-      
-      <div className="flex justify-center p-4 border-b border-dark">
-        <div className="flex items-center">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-            currentStep === 1 ? 'bg-primary text-light' : 'bg-dark text-light-dark'
-          }`}>
-            1
-          </div>
-          <div className={`w-16 h-1 ${
-            currentStep === 2 ? 'bg-primary' : 'bg-dark'
-          }`}></div>
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-            currentStep === 2 ? 'bg-primary text-light' : 'bg-dark text-light-dark'
-          }`}>
-            2
-          </div>
-        </div>
-      </div>
-      
       <form onSubmit={handleSubmit} className="p-4 sm:p-6">
         {currentStep === 1 && (
           <div className="mb-8">
@@ -349,9 +266,7 @@ const WorkoutForm: React.FC<WorkoutFormProps> = ({
         
         {currentStep === 2 && (
           <div>
-            <h3 className="text-lg font-semibold mb-4 text-light">Add Exercises</h3>
-            
-            <div className="bg-dark rounded-xl p-4 mb-6">
+            <div className="bg-dark rounded-xl p-3 sm:p-4 mb-6">
               <div className="flex justify-between items-center">
                 <h4 className="text-primary font-medium">Selected Date</h4>
                 <button
@@ -367,101 +282,115 @@ const WorkoutForm: React.FC<WorkoutFormProps> = ({
               </p>
             </div>
             
-            <div className="instagram-border-gradient mb-6">
-              <div className="bg-dark p-4 space-y-4">
+            <div className="bg-dark rounded-xl p-3 sm:p-4 mb-6">
+              <div className="flex justify-between items-center mb-3 border-b border-dark-light pb-2">
+                <h4 className="text-primary font-medium">Exercise Details</h4>
+              </div>
+              
+              <div className="space-y-4 bg-gradient-to-r from-primary/10 to-secondary/10 p-4 rounded-xl border border-primary/20">
                 <div>
                   <label className="block text-sm font-medium text-light mb-1.5">
                     Exercise Type
                   </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Dumbbell size={18} className="text-primary" />
-                    </div>
-                    <select
-                      className="input-field pl-10 text-sm appearance-none"
-                      value={exerciseType}
-                      onChange={(e) => setExerciseType(e.target.value)}
-                    >
-                      <optgroup label="Default Exercises">
-                        {DEFAULT_EXERCISE_TYPES.map(type => (
+                  <select
+                    className="input-field text-sm w-full"
+                    value={exerciseType}
+                    onChange={(e) => setExerciseType(e.target.value)}
+                  >
+                    <optgroup label="Default Exercises">
+                      {DEFAULT_EXERCISE_TYPES.map(type => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </optgroup>
+                    
+                    {customExercises.length > 0 && (
+                      <optgroup label="Custom Exercises">
+                        {customExercises.map(type => (
                           <option key={type} value={type}>{type}</option>
                         ))}
                       </optgroup>
-                      
-                      {customExercises.length > 0 && (
-                        <optgroup label="Custom Exercises">
-                          {customExercises.map(type => (
-                            <option key={type} value={type}>{type}</option>
-                          ))}
-                        </optgroup>
-                      )}
-                    </select>
-                  </div>
+                    )}
+                  </select>
                 </div>
-
+                
                 <div>
                   <label className="block text-sm font-medium text-light mb-1.5 flex items-center">
                     <Repeat size={18} className="mr-2 text-primary" />
                     Make Recurring
                   </label>
-                  <select
-                    className="input-field text-sm"
-                    value={recurring}
-                    onChange={handleRecurringChange}
-                  >
-                    <option value="none">None (Single workout)</option>
-                    <option value="weekly">Weekly (Next week only)</option>
-                    <option value="biweekly">Biweekly (Next 2 occurrences)</option>
-                    <option value="month">Month (Next 4 weeks)</option>
-                  </select>
+                  <div className="relative">
+                    <select
+                      className="input-field text-sm w-full appearance-none cursor-pointer"
+                      value={recurring}
+                      onChange={handleRecurringChange}
+                    >
+                      <option value="none">None (Single workout)</option>
+                      <option value="weekly">Weekly (Next week only)</option>
+                      <option value="biweekly">Biweekly (Next 2 occurrences)</option>
+                      <option value="month">Month (Next 4 weeks)</option>
+                    </select>
+                  </div>
                   {recurring !== 'none' && (
                     <p className="text-xs text-light-dark mt-1.5">
                       {getRecurringDescription(recurring)}
                     </p>
                   )}
                 </div>
-              </div>
-            </div>
-
-            <div className="instagram-border-gradient mb-6">
-              <div className="bg-dark p-4">
-                <h4 className="text-primary font-medium mb-4">Exercise Details</h4>
                 
                 {isWeightExercise(exerciseType) ? (
                   <div className="grid grid-cols-2 gap-4">
-                    <NumberInput
-                      value={setsInput}
-                      onChange={setSetsInput}
-                      label="Sets"
-                      icon={Dumbbell}
-                    />
-                    <NumberInput
-                      value={repsInput}
-                      onChange={setRepsInput}
-                      label="Reps"
-                      icon={Dumbbell}
-                    />
+                    <div>
+                      <label className="block text-sm font-medium text-light mb-1.5">
+                        Sets
+                      </label>
+                      <input
+                        type="number"
+                        className="input-field text-sm"
+                        value={setsInput}
+                        onChange={handleSetsChange}
+                        onBlur={() => handleInputBlur(setsInput, setSets, setSetsInput, 1)}
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-light mb-1.5">
+                        Reps
+                      </label>
+                      <input
+                        type="number"
+                        className="input-field text-sm"
+                        value={repsInput}
+                        onChange={handleRepsChange}
+                        onBlur={() => handleInputBlur(repsInput, setReps, setRepsInput, 1)}
+                      />
+                    </div>
                   </div>
                 ) : (
-                  <NumberInput
-                    value={durationInput}
-                    onChange={setDurationInput}
-                    label="Duration (minutes)"
-                    icon={Clock}
-                  />
+                  <div>
+                    <label className="block text-sm font-medium text-light mb-1.5">
+                      Duration (minutes)
+                    </label>
+                    <input
+                      type="number"
+                      className="input-field text-sm"
+                      value={durationInput}
+                      onChange={handleDurationChange}
+                      onBlur={() => handleInputBlur(durationInput, setDuration, setDurationInput, 1)}
+                    />
+                  </div>
                 )}
               </div>
+              
+              <button
+                type="button"
+                className="btn-primary flex items-center justify-center w-full text-sm mt-4"
+                onClick={handleAddExercise}
+              >
+                <Plus size={16} className="mr-2" />
+                Add Exercise
+              </button>
             </div>
-
-            <button
-              type="button"
-              className="btn-primary w-full flex items-center justify-center mb-8"
-              onClick={handleAddExercise}
-            >
-              <Plus size={18} className="mr-2" />
-              Add Exercise
-            </button>
-
+            
             <div className="mb-8">
               <h3 className="text-lg font-semibold mb-4 text-light">Your Workout Plan</h3>
               
@@ -476,7 +405,7 @@ const WorkoutForm: React.FC<WorkoutFormProps> = ({
                     .map(date => (
                       <div key={date} className="bg-dark rounded-xl p-3 sm:p-4">
                         <div className="flex justify-between items-center mb-3 border-b border-dark-light pb-2">
-                           <div>
+                          <div>
                             <h4 className="font-medium text-base sm:text-lg text-light">
                               {formatGMTDate(parseISO(date), 'EEE, MMM d, yyyy')}
                             </h4>
@@ -553,7 +482,7 @@ const WorkoutForm: React.FC<WorkoutFormProps> = ({
               </div>
             </div>
             
-            <div className="flex flex-col sm:flex-row justify-between gap-4 sm:gap-6">
+            <div className="flex flex-col sm:flex-row justify-between gap-4 sm:gap-0">
               <button
                 type="button"
                 className="btn-secondary w-full sm:w-auto"
