@@ -7,6 +7,8 @@ import { Calendar, Dumbbell, Clock, Activity, User, ChevronRight, TrendingUp, Ta
 import { startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import WeeklyCalendar from '../components/WeeklyCalendar';
 import { formatGMTDate, formatGMTDateToISO, getCurrentGMTDate } from '../utils/dateUtils';
+import { useSpring, animated } from '@react-spring/web';
+import { useDrag } from '@use-gesture/react';
 
 type TabType = 'analytics' | 'today' | 'weekly';
 
@@ -24,6 +26,50 @@ const Dashboard: React.FC = () => {
   });
   
   const [weekWorkouts, setWeekWorkouts] = useState<DateWorkout[]>([]);
+
+  // Spring animation for tab content
+  const [{ x }, api] = useSpring(() => ({ x: 0 }));
+
+  // Tab indices for swipe calculation
+  const tabIndices: Record<TabType, number> = {
+    analytics: 0,
+    today: 1,
+    weekly: 2
+  };
+
+  const tabs: TabType[] = ['analytics', 'today', 'weekly'];
+
+  // Convert tab index to tab type
+  const getTabFromIndex = (index: number): TabType => tabs[index];
+
+  // Get current tab index
+  const getCurrentTabIndex = () => tabIndices[activeTab];
+
+  // Bind drag gesture
+  const bind = useDrag(({ movement: [mx], direction: [dx], distance, cancel }) => {
+    const currentIndex = getCurrentTabIndex();
+    
+    // Cancel drag if at the edges
+    if ((currentIndex === 0 && dx < 0) || (currentIndex === 2 && dx > 0)) {
+      cancel();
+      return;
+    }
+
+    if (distance > 50) {
+      // Calculate new index based on swipe direction
+      const newIndex = dx > 0 ? Math.max(0, currentIndex - 1) : Math.min(2, currentIndex + 1);
+      setActiveTab(getTabFromIndex(newIndex));
+      api.start({ x: 0, immediate: true });
+      cancel();
+    } else {
+      // Update spring during drag
+      api.start({ x: mx, immediate: true });
+    }
+  }, {
+    axis: 'x',
+    bounds: { left: -100, right: 100 },
+    rubberband: true
+  });
 
   useEffect(() => {
     const fetchWorkoutPlan = async () => {
@@ -349,10 +395,14 @@ const Dashboard: React.FC = () => {
                 </button>
               </div>
               
-              {/* Add margin to the content container */}
-              <div className="mt-6">
+              {/* Swipeable content container */}
+              <animated.div
+                {...bind()}
+                style={{ x }}
+                className="mt-6 touch-pan-y"
+              >
                 {renderMobileContent()}
-              </div>
+              </animated.div>
             </div>
 
             {/* Desktop Layout - Hidden on mobile */}
