@@ -27,9 +27,6 @@ const Dashboard: React.FC = () => {
   
   const [weekWorkouts, setWeekWorkouts] = useState<DateWorkout[]>([]);
 
-  // Spring animation for tab content
-  const [{ x }, api] = useSpring(() => ({ x: 0 }));
-
   // Tab indices for swipe calculation
   const tabIndices: Record<TabType, number> = {
     analytics: 0,
@@ -39,6 +36,12 @@ const Dashboard: React.FC = () => {
 
   const tabs: TabType[] = ['analytics', 'today', 'weekly'];
 
+  // Spring animation for tab content
+  const [{ x }, api] = useSpring(() => ({ 
+    x: 0,
+    config: { tension: 270, friction: 32 }
+  }));
+
   // Convert tab index to tab type
   const getTabFromIndex = (index: number): TabType => tabs[index];
 
@@ -46,8 +49,9 @@ const Dashboard: React.FC = () => {
   const getCurrentTabIndex = () => tabIndices[activeTab];
 
   // Bind drag gesture
-  const bind = useDrag(({ movement: [mx], direction: [dx], distance, cancel }) => {
+  const bind = useDrag(({ movement: [mx], direction: [dx], distance, velocity: [vx], last, cancel }) => {
     const currentIndex = getCurrentTabIndex();
+    const screenWidth = window.innerWidth;
     
     // Cancel drag if at the edges
     if ((currentIndex === 0 && dx < 0) || (currentIndex === 2 && dx > 0)) {
@@ -55,20 +59,29 @@ const Dashboard: React.FC = () => {
       return;
     }
 
-    if (distance > 50) {
-      // Calculate new index based on swipe direction
-      const newIndex = dx > 0 ? Math.max(0, currentIndex - 1) : Math.min(2, currentIndex + 1);
-      setActiveTab(getTabFromIndex(newIndex));
-      api.start({ x: 0, immediate: true });
-      cancel();
+    if (last) {
+      // If it's the final touch/mouse event
+      const triggerSwipe = Math.abs(mx) > screenWidth * 0.15 || Math.abs(vx) > 0.5;
+      
+      if (triggerSwipe) {
+        // Calculate new index based on swipe direction
+        const newIndex = dx > 0 ? Math.max(0, currentIndex - 1) : Math.min(2, currentIndex + 1);
+        setActiveTab(getTabFromIndex(newIndex));
+        // Animate to the new position
+        api.start({ x: 0, immediate: false });
+      } else {
+        // Spring back to original position
+        api.start({ x: 0, immediate: false });
+      }
     } else {
-      // Update spring during drag
+      // During drag, update position
       api.start({ x: mx, immediate: true });
     }
   }, {
     axis: 'x',
-    bounds: { left: -100, right: 100 },
-    rubberband: true
+    rubberband: true,
+    bounds: { left: -window.innerWidth, right: window.innerWidth },
+    from: () => [x.get(), 0]
   });
 
   useEffect(() => {
@@ -146,155 +159,171 @@ const Dashboard: React.FC = () => {
   };
 
   const renderMobileContent = () => {
-    switch (activeTab) {
-      case 'analytics':
-        return (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-dark-light rounded-xl p-3 border border-white/5">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="bg-primary/10 w-8 h-8 rounded-lg flex items-center justify-center">
-                    <Calendar size={16} className="text-primary" />
-                  </div>
-                  <TrendingUp size={14} className="text-primary" />
+    const content = (
+      <div className="space-y-4">
+        {/* Analytics Tab */}
+        <animated.div
+          style={{
+            display: activeTab === 'analytics' ? 'block' : 'none',
+            transform: x.to(x => `translate3d(${x}px,0,0)`)
+          }}
+        >
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-dark-light rounded-xl p-3 border border-white/5">
+              <div className="flex items-center justify-between mb-2">
+                <div className="bg-primary/10 w-8 h-8 rounded-lg flex items-center justify-center">
+                  <Calendar size={16} className="text-primary" />
                 </div>
-                <p className="text-lg font-bold text-light mb-0.5">{workoutDays}</p>
-                <p className="text-[10px] text-light-dark">Workout Days</p>
+                <TrendingUp size={14} className="text-primary" />
               </div>
-
-              <div className="bg-dark-light rounded-xl p-3 border border-white/5">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="bg-secondary/10 w-8 h-8 rounded-lg flex items-center justify-center">
-                    <Dumbbell size={16} className="text-secondary" />
-                  </div>
-                  <Target size={14} className="text-secondary" />
-                </div>
-                <p className="text-lg font-bold text-light mb-0.5">{totalExercises}</p>
-                <p className="text-[10px] text-light-dark">Total Exercises</p>
-              </div>
-
-              <div className="bg-dark-light rounded-xl p-3 border border-white/5">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="bg-primary/10 w-8 h-8 rounded-lg flex items-center justify-center">
-                    <Clock size={16} className="text-primary" />
-                  </div>
-                  <Flame size={14} className="text-primary" />
-                </div>
-                <p className="text-lg font-bold text-light mb-0.5">{totalDuration}</p>
-                <p className="text-[10px] text-light-dark">Total Minutes</p>
-              </div>
-
-              <div className="bg-dark-light rounded-xl p-3 border border-white/5">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="bg-secondary/10 w-8 h-8 rounded-lg flex items-center justify-center">
-                    <Activity size={16} className="text-secondary" />
-                  </div>
-                  <ChevronRight size={14} className="text-secondary" />
-                </div>
-                <p className="text-lg font-bold text-light mb-0.5">{weekWorkouts.length}</p>
-                <p className="text-[10px] text-light-dark">This Week</p>
-              </div>
+              <p className="text-lg font-bold text-light mb-0.5">{workoutDays}</p>
+              <p className="text-[10px] text-light-dark">Workout Days</p>
             </div>
 
-            <div className="bg-dark-light rounded-xl p-4 border border-white/5">
-              <h3 className="text-base font-semibold text-light mb-3">Quick Actions</h3>
-              <div className="space-y-2">
-                <Link 
-                  to="/workouts" 
-                  className="bg-dark hover:bg-dark-light transition-colors flex items-center p-3 rounded-lg border border-white/5 hover:border-primary/20"
-                >
-                  <div className="bg-primary/10 w-8 h-8 rounded-lg flex items-center justify-center mr-3">
-                    <Dumbbell size={16} className="text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-light font-medium">View Workouts</p>
-                    <p className="text-[10px] text-light-dark">See all planned workouts</p>
-                  </div>
-                </Link>
-                
-                <Link 
-                  to="/create-plan" 
-                  className="bg-dark hover:bg-dark-light transition-colors flex items-center p-3 rounded-lg border border-white/5 hover:border-secondary/20"
-                >
-                  <div className="bg-secondary/10 w-8 h-8 rounded-lg flex items-center justify-center mr-3">
-                    <Calendar size={16} className="text-secondary" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-light font-medium">Create Plan</p>
-                    <p className="text-[10px] text-light-dark">Plan new workouts</p>
-                  </div>
-                </Link>
+            <div className="bg-dark-light rounded-xl p-3 border border-white/5">
+              <div className="flex items-center justify-between mb-2">
+                <div className="bg-secondary/10 w-8 h-8 rounded-lg flex items-center justify-center">
+                  <Dumbbell size={16} className="text-secondary" />
+                </div>
+                <Target size={14} className="text-secondary" />
               </div>
+              <p className="text-lg font-bold text-light mb-0.5">{totalExercises}</p>
+              <p className="text-[10px] text-light-dark">Total Exercises</p>
+            </div>
+
+            <div className="bg-dark-light rounded-xl p-3 border border-white/5">
+              <div className="flex items-center justify-between mb-2">
+                <div className="bg-primary/10 w-8 h-8 rounded-lg flex items-center justify-center">
+                  <Clock size={16} className="text-primary" />
+                </div>
+                <Flame size={14} className="text-primary" />
+              </div>
+              <p className="text-lg font-bold text-light mb-0.5">{totalDuration}</p>
+              <p className="text-[10px] text-light-dark">Total Minutes</p>
+            </div>
+
+            <div className="bg-dark-light rounded-xl p-3 border border-white/5">
+              <div className="flex items-center justify-between mb-2">
+                <div className="bg-secondary/10 w-8 h-8 rounded-lg flex items-center justify-center">
+                  <Activity size={16} className="text-secondary" />
+                </div>
+                <ChevronRight size={14} className="text-secondary" />
+              </div>
+              <p className="text-lg font-bold text-light mb-0.5">{weekWorkouts.length}</p>
+              <p className="text-[10px] text-light-dark">This Week</p>
             </div>
           </div>
-        );
 
-      case 'today':
-        return todayWorkout ? (
           <div className="bg-dark-light rounded-xl p-4 border border-white/5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-light flex items-center">
-                <Flame size={20} className="text-primary mr-2" />
-                Today's Workout
-              </h2>
-              {todayWorkout.recurring && todayWorkout.recurring !== 'none' && (
-                <span className="text-[10px] px-2 py-1 rounded-full bg-primary/10 text-primary">
-                  {todayWorkout.recurring === 'weekly' ? 'Weekly' : todayWorkout.recurring === 'biweekly' ? 'Biweekly' : 'Monthly'}
-                </span>
-              )}
+            <h3 className="text-base font-semibold text-light mb-3">Quick Actions</h3>
+            <div className="space-y-2">
+              <Link 
+                to="/workouts" 
+                className="bg-dark hover:bg-dark-light transition-colors flex items-center p-3 rounded-lg border border-white/5 hover:border-primary/20"
+              >
+                <div className="bg-primary/10 w-8 h-8 rounded-lg flex items-center justify-center mr-3">
+                  <Dumbbell size={16} className="text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm text-light font-medium">View Workouts</p>
+                  <p className="text-[10px] text-light-dark">See all planned workouts</p>
+                </div>
+              </Link>
+              
+              <Link 
+                to="/create-plan" 
+                className="bg-dark hover:bg-dark-light transition-colors flex items-center p-3 rounded-lg border border-white/5 hover:border-secondary/20"
+              >
+                <div className="bg-secondary/10 w-8 h-8 rounded-lg flex items-center justify-center mr-3">
+                  <Calendar size={16} className="text-secondary" />
+                </div>
+                <div>
+                  <p className="text-sm text-light font-medium">Create Plan</p>
+                  <p className="text-[10px] text-light-dark">Plan new workouts</p>
+                </div>
+              </Link>
             </div>
-            
-            <div className="space-y-3">
-              {todayWorkout.exercises.map((exercise, index) => (
-                <div key={index} className="bg-dark rounded-lg p-3 border border-white/5">
-                  <div className="flex items-center">
-                    <div className="mr-3 bg-primary/10 w-10 h-10 rounded-lg flex items-center justify-center">
-                      {renderExerciseIcon(exercise)}
-                    </div>
-                    <div>
-                      <p className="font-medium text-sm text-light flex items-center">
-                        {exercise.type}
-                        {exercise.isCustom && (
-                          <span className="ml-2 text-[10px] bg-secondary/10 text-secondary px-1.5 py-0.5 rounded-full">
-                            Custom
-                          </span>
+          </div>
+        </animated.div>
+
+        {/* Today Tab */}
+        <animated.div
+          style={{
+            display: activeTab === 'today' ? 'block' : 'none',
+            transform: x.to(x => `translate3d(${x}px,0,0)`)
+          }}
+        >
+          {todayWorkout ? (
+            <div className="bg-dark-light rounded-xl p-4 border border-white/5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-light flex items-center">
+                  <Flame size={20} className="text-primary mr-2" />
+                  Today's Workout
+                </h2>
+                {todayWorkout.recurring && todayWorkout.recurring !== 'none' && (
+                  <span className="text-[10px] px-2 py-1 rounded-full bg-primary/10 text-primary">
+                    {todayWorkout.recurring === 'weekly' ? 'Weekly' : todayWorkout.recurring === 'biweekly' ? 'Biweekly' : 'Monthly'}
+                  </span>
+                )}
+              </div>
+              
+              <div className="space-y-3">
+                {todayWorkout.exercises.map((exercise, index) => (
+                  <div key={index} className="bg-dark rounded-lg p-3 border border-white/5">
+                    <div className="flex items-center">
+                      <div className="mr-3 bg-primary/10 w-10 h-10 rounded-lg flex items-center justify-center">
+                        {renderExerciseIcon(exercise)}
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm text-light flex items-center">
+                          {exercise.type}
+                          {exercise.isCustom && (
+                            <span className="ml-2 text-[10px] bg-secondary/10 text-secondary px-1.5 py-0.5 rounded-full">
+                              Custom
+                            </span>
+                          )}
+                        </p>
+                        {exercise.sets && exercise.reps && (
+                          <p className="text-[10px] text-light-dark mt-0.5">
+                            {exercise.sets} sets × {exercise.reps} reps
+                          </p>
                         )}
-                      </p>
-                      {exercise.sets && exercise.reps && (
-                        <p className="text-[10px] text-light-dark mt-0.5">
-                          {exercise.sets} sets × {exercise.reps} reps
-                        </p>
-                      )}
-                      {exercise.duration && (
-                        <p className="text-[10px] text-light-dark mt-0.5">
-                          {exercise.duration} minutes
-                        </p>
-                      )}
+                        {exercise.duration && (
+                          <p className="text-[10px] text-light-dark mt-0.5">
+                            {exercise.duration} minutes
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="bg-dark-light rounded-xl p-6 text-center border border-white/5">
-            <div className="bg-primary/10 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
-              <Dumbbell size={24} className="text-primary" />
+          ) : (
+            <div className="bg-dark-light rounded-xl p-6 text-center border border-white/5">
+              <div className="bg-primary/10 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Dumbbell size={24} className="text-primary" />
+              </div>
+              <h3 className="text-light font-medium mb-1">No Workout Today</h3>
+              <p className="text-sm text-light-dark mb-4">Take a rest day or plan a new workout.</p>
+              <Link 
+                to="/create-plan" 
+                className="bg-instagram-gradient text-white text-sm px-4 py-2 rounded-xl inline-flex items-center"
+              >
+                <Plus size={16} className="mr-1" />
+                Plan Workout
+              </Link>
             </div>
-            <h3 className="text-light font-medium mb-1">No Workout Today</h3>
-            <p className="text-sm text-light-dark mb-4">Take a rest day or plan a new workout.</p>
-            <Link 
-              to="/create-plan" 
-              className="bg-instagram-gradient text-white text-sm px-4 py-2 rounded-xl inline-flex items-center"
-            >
-              <Plus size={16} className="mr-1" />
-              Plan Workout
-            </Link>
-          </div>
-        );
+          )}
+        </animated.div>
 
-      case 'weekly':
-        return (
+        {/* Weekly Tab */}
+        <animated.div
+          style={{
+            display: activeTab === 'weekly' ? 'block' : 'none',
+            transform: x.to(x => `translate3d(${x}px,0,0)`)
+          }}
+        >
           <div className="bg-dark-light rounded-xl border border-white/5">
             <div className="flex items-center justify-between p-4 border-b border-white/5">
               <h2 className="text-lg font-bold text-light flex items-center">
@@ -311,8 +340,15 @@ const Dashboard: React.FC = () => {
               />
             </div>
           </div>
-        );
-    }
+        </animated.div>
+      </div>
+    );
+
+    return (
+      <div {...bind()} className="touch-pan-x">
+        {content}
+      </div>
+    );
   };
 
   return (
@@ -395,14 +431,8 @@ const Dashboard: React.FC = () => {
                 </button>
               </div>
               
-              {/* Swipeable content container */}
-              <animated.div
-                {...bind()}
-                style={{ x }}
-                className="mt-6 touch-pan-y"
-              >
-                {renderMobileContent()}
-              </animated.div>
+              {/* Mobile Content */}
+              {renderMobileContent()}
             </div>
 
             {/* Desktop Layout - Hidden on mobile */}
