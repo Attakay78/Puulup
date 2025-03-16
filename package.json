@@ -10,8 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@react-spring/web": "^9.7.3",
-    "@use-gesture/react": "^10.3.0",
     "date-fns": "^2.30.0",
     "date-fns-tz": "^2.0.0",
     "lucide-react": "^0.344.0",
