@@ -752,7 +752,7 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-dark pt-4 sm:pt-10 pb-12 md:pb-12 pb-24">
+    <div className="min-h-screen bg-dark pt-8 sm:pt-16 pb-12 md:pb-12 pb-24">
       <div className="container mx-auto px-3 sm:px-4">
         <div className="bg-gradient-to-r from-primary to-secondary rounded-2xl p-4 sm:p-8 mb-6 sm:mb-8">
           <div className="flex items-center space-x-3 sm:space-x-4">
