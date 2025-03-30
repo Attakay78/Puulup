@@ -105,7 +105,7 @@ const CustomExerciseManager: React.FC<CustomExerciseManagerProps> = ({
       
       if (exerciseToDelete) {
         // Delete the exercise using its ID
-        const response = await fetch(`/api/exercises/${exerciseToDelete.id}`, {
+        const response = await fetch(`https://karyde.com/gym/api/exercises/${exerciseToDelete.id}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`
