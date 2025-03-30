@@ -47,14 +47,5 @@ export default defineConfig({
   ],
   optimizeDeps: {
     exclude: ['lucide-react'],
-  },
-  server: {
-    proxy: {
-      '/gym/api': {
-        target: 'https://karyde.com',
-        changeOrigin: true,
-        secure: true,
-      }
-    }
   }
 });

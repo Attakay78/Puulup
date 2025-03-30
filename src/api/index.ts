@@ -2,8 +2,7 @@ import { User, WorkoutPlan, DateWorkoutPlan, DateWorkout, Exercise, ApiWorkout, 
 import { formatGMTDateToISO, getCurrentGMTDate } from '../utils/dateUtils';
 
 // Base URL for API requests
-// Using relative URL to work with the proxy configuration in vite.config.ts
-const API_BASE_URL = 'gym/api';
+const API_BASE_URL = 'https://karyde.com/gym/api';
 
 // Helper function for making authenticated API requests
 const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
