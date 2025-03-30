@@ -1,0 +1,6 @@
+# Allow all web crawlers to index the site
+User-agent: *
+Allow: /
+
+# Sitemap location - update this when you have a real sitemap
+# Sitemap: https://puulup.com/sitemap.xml 

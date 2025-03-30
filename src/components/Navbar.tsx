@@ -21,7 +21,10 @@ const Navbar: React.FC = () => {
               <img 
                 src="/puulup-logo.png" 
                 alt="Puulup Logo" 
-                className="h-8 w-auto rounded-full transform transition-transform duration-300 group-hover:scale-110" 
+                className="h-8 w-8 rounded-full transform transition-transform duration-300 group-hover:scale-110" 
+                width="32"
+                height="32"
+                loading="eager"
               />
             </div>
             <span className="logo-text text-2xl md:text-3xl text-primary transition-all duration-300 group-hover:text-primary-light">Puulup</span>

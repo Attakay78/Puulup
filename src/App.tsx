@@ -7,12 +7,28 @@ import Home from './pages/Home';
 import SignUp from './pages/SignUp';
 import SignIn from './pages/SignIn';
 import Dashboard from './pages/Dashboard';
-import CreatePlan from './pages/CreatePlan';
-import Profile from './pages/Profile';
-import Workouts from './pages/Workouts';
 import { Home as HomeIcon, Dumbbell, User, LayoutDashboard } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
+
+// Lazy load non-critical components
+const CreatePlan = lazy(() => import('./pages/CreatePlan'));
+const Profile = lazy(() => import('./pages/Profile'));
+const Workouts = lazy(() => import('./pages/Workouts'));
+
+// Loading fallback component
+const LoadingFallback = () => (
+  <div className="min-h-screen bg-dark flex items-center justify-center">
+    <div className="flex flex-col items-center">
+      <div className="flex space-x-2 mb-4">
+        <div className="w-3 h-3 rounded-full bg-primary animate-pulse"></div>
+        <div className="w-3 h-3 rounded-full bg-primary animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+        <div className="w-3 h-3 rounded-full bg-primary animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+      </div>
+      <p className="text-light-dark text-sm">Loading...</p>
+    </div>
+  </div>
+);
 
 // ScrollToTop component to reset scroll position on navigation
 const ScrollToTop = () => {
@@ -39,44 +55,46 @@ const AppContent = () => {
       <ScrollToTop />
       <Navbar />
       <main className="flex-grow">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/signup" element={<SignUp />} />
-          <Route path="/signin" element={<SignIn />} />
-          <Route 
-            path="/dashboard" 
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/create-plan" 
-            element={
-              <ProtectedRoute>
-                <CreatePlan />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/workouts" 
-            element={
-              <ProtectedRoute>
-                <Workouts />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/profile" 
-            element={
-              <ProtectedRoute>
-                <Profile />
-              </ProtectedRoute>
-            } 
-          />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <Suspense fallback={<LoadingFallback />}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/signup" element={<SignUp />} />
+            <Route path="/signin" element={<SignIn />} />
+            <Route 
+              path="/dashboard" 
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/create-plan" 
+              element={
+                <ProtectedRoute>
+                  <CreatePlan />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/workouts" 
+              element={
+                <ProtectedRoute>
+                  <Workouts />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/profile" 
+              element={
+                <ProtectedRoute>
+                  <Profile />
+                </ProtectedRoute>
+              } 
+            />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </main>
       {showMobileNavbar && (
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-dark-light shadow-lg z-40 pb-safe">
@@ -120,7 +138,10 @@ const AppContent = () => {
               <img 
                 src="/puulup-logo.png" 
                 alt="Puulup Logo" 
-                className="h-6 w-auto rounded-full" 
+                className="h-6 w-6 rounded-full" 
+                width="24"
+                height="24"
+                loading="lazy"
               />
             </div>
             <span className="logo-text text-xl text-primary">PuulUp</span>
