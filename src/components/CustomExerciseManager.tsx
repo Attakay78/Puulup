@@ -44,7 +44,7 @@ const CustomExerciseManager: React.FC<CustomExerciseManagerProps> = ({
       }
       
       // Create the new exercise using fetch with auth header
-      const response = await fetch('/api/exercises', {
+      const response = await fetch('https://karyde.com/gym/api/exercises', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
