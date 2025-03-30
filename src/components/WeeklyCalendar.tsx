@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { format, addDays, isSameDay, parseISO } from 'date-fns';
-import { ChevronLeft, ChevronRight, Dumbbell, Clock } from 'lucide-react';
-import { DateWorkout } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { format, addDays, isToday as isDayToday, isSameDay, addWeeks, startOfWeek, endOfWeek, parseISO, compareAsc } from 'date-fns';
+import { ChevronLeft, ChevronRight, ChevronDown, Dumbbell, Clock, Check } from 'lucide-react';
+import { DateWorkout, WorkoutStatus, RecurringType } from '../types';
 import { formatGMTDate, formatGMTDateToISO, getCurrentGMTDate, isSameGMTDay } from '../utils/dateUtils';
 
 interface WeeklyCalendarProps {
@@ -13,6 +13,11 @@ interface WeeklyCalendarProps {
 const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({ weekStart, workouts, onWeekChange }) => {
   // Generate array of 7 days starting from weekStart
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  
+  // Sort workouts by date for consistent order
+  const sortedWorkouts = useMemo(() => {
+    return [...workouts].sort((a, b) => compareAsc(parseISO(a.date), parseISO(b.date)));
+  }, [workouts]);
   
   // State to track selected day for workout details
   const [selectedDay, setSelectedDay] = useState<Date | null>(getCurrentGMTDate());
@@ -33,7 +38,43 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({ weekStart, workouts, on
   // Get workout for a specific date
   const getWorkoutForDate = (date: Date) => {
     const dateString = formatGMTDateToISO(date);
-    return workouts.find(workout => workout.date === dateString);
+    
+    // First check for direct workout on this date
+    const directWorkout = sortedWorkouts.find(workout => workout.date === dateString);
+    if (directWorkout) return directWorkout;
+    
+    // If no direct workout, check for recurring exercises
+    const recurringExercises: DateWorkout['exercises'] = [];
+    
+    for (const workout of sortedWorkouts) {
+      // Process each exercise
+      workout.exercises.forEach(exercise => {
+        if (exercise.recurring && exercise.recurring !== 'none') {
+          const workoutDate = parseISO(workout.date);
+          
+          if (typeof exercise.recurring === 'number') {
+            // Check if this date is within the recurring weeks
+            for (let i = 1; i <= exercise.recurring; i++) {
+              const nextDate = addWeeks(workoutDate, i);
+              if (format(nextDate, 'yyyy-MM-dd') === dateString) {
+                recurringExercises.push(exercise);
+                break;
+              }
+            }
+          }
+        }
+      });
+    }
+    
+    // If we found recurring exercises, create a synthetic workout
+    if (recurringExercises.length > 0) {
+      return {
+        date: dateString,
+        exercises: recurringExercises
+      };
+    }
+    
+    return undefined;
   };
   
   // Check if date is today
@@ -56,166 +97,251 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({ weekStart, workouts, on
   };
   
   // Get recurring badge class based on type
-  const getRecurringBadgeClass = (recurring: string) => {
-    switch (recurring) {
-      case 'weekly':
+  const getRecurringBadgeClass = (recurring: RecurringType) => {
+    if (recurring === 'none') return '';
+    
+    if (typeof recurring === 'number') {
+      if (recurring === 1) {
         return 'bg-primary bg-opacity-20 text-primary';
-      case 'biweekly':
+      } else if (recurring === 2) {
         return 'bg-secondary bg-opacity-20 text-secondary';
-      case 'month':
+      } else if (recurring >= 3) {
         return 'bg-green-500 bg-opacity-20 text-green-500';
-      default:
-        return '';
+      }
     }
+    
+    return '';
+  };
+  
+  // Get workout completion status
+  const getWorkoutCompletionStatus = (workout: DateWorkout | null | undefined) => {
+    if (!workout || workout.exercises.length === 0) return null;
+    
+    const completedExercises = workout.exercises.filter(e => e.status === WorkoutStatus.DONE).length;
+    
+    if (completedExercises === 0) return 'not-started';
+    if (completedExercises === workout.exercises.length) return 'completed';
+    return 'in-progress';
+  };
+
+  // Calculate completion percentage
+  const getCompletionPercentage = (workout: DateWorkout | null | undefined) => {
+    if (!workout || workout.exercises.length === 0) return 0;
+    
+    const completedExercises = workout.exercises.filter(e => e.status === WorkoutStatus.DONE).length;
+    return Math.round((completedExercises / workout.exercises.length) * 100);
   };
   
   return (
-    <div className="bg-dark-light rounded-2xl shadow-md overflow-hidden">
-      <div className="p-3 sm:p-4 bg-primary text-light">
-        <div className="flex justify-between items-center">
-          <button 
-            onClick={goToPreviousWeek}
-            className="p-1 rounded-full hover:bg-primary-dark transition-colors"
-            aria-label="Previous week"
-            type="button"
-          >
-            <ChevronLeft size={20} />
-          </button>
-          <h3 className="text-base sm:text-lg font-semibold">
-            {format(weekStart, 'MMM d')} - {format(addDays(weekStart, 6), 'MMM d, yyyy')}
-          </h3>
-          <button 
-            onClick={goToNextWeek}
-            className="p-1 rounded-full hover:bg-primary-dark transition-colors"
-            aria-label="Next week"
-            type="button"
-          >
-            <ChevronRight size={20} />
-          </button>
-        </div>
+    <div className="rounded-xl overflow-hidden bg-dark-light border border-white/5">
+      <div className="flex items-center justify-between bg-dark p-3 sm:p-4">
+        <button 
+          className="text-light-dark hover:text-primary"
+          onClick={goToPreviousWeek}
+        >
+          <ChevronLeft size={20} />
+        </button>
+        
+        <h3 className="text-sm sm:text-base font-medium text-light">
+          {format(weekStart, 'MMM d')} - {format(addDays(weekStart, 6), 'MMM d, yyyy')}
+        </h3>
+        
+        <button 
+          className="text-light-dark hover:text-primary"
+          onClick={goToNextWeek}
+        >
+          <ChevronRight size={20} />
+        </button>
       </div>
       
-      <div className="grid grid-cols-7 gap-1 sm:gap-2 p-2 sm:p-4 mb-4">
-        {days.map(day => {
-          const hasWorkout = !!getWorkoutForDate(day);
-          const dayAbbr = format(day, 'EEE');
-          const dayNum = format(day, 'd');
-          const isCurrentDay = isToday(day);
-          const isDaySelected = isSelected(day);
+      <div className="grid grid-cols-7 divide-x divide-dark border-b border-dark">
+        {days.map((day, index) => {
+          const workout = getWorkoutForDate(day);
+          const hasWorkout = !!workout;
+          const exerciseCount = workout?.exercises.length || 0;
+          const _isToday = isToday(day);
+          const _isSelected = isSelected(day);
+          const completionStatus = getWorkoutCompletionStatus(workout);
           
           return (
-            <div key={day.toString()} className="flex flex-col items-center">
-              <button 
-                onClick={() => handleDaySelect(day)}
-                className={`workout-day-btn w-10 h-10 sm:w-12 sm:h-12 mb-1 sm:mb-2 ${
-                  isDaySelected ? 'bg-secondary text-light' :
-                  isCurrentDay ? 'bg-primary text-light' : 
-                  hasWorkout ? 'workout-day-btn-active' : 'workout-day-btn-inactive'
-                }`}
-                aria-label={`Select ${format(day, 'EEEE, MMMM d')}`}
-              >
-                <div className="flex flex-col items-center">
-                  <span className="text-xs">{dayAbbr}</span>
-                  <span className="text-sm font-bold">{dayNum}</span>
-                </div>
-              </button>
-              <span className="text-[10px] sm:text-xs text-light-dark hidden sm:inline">
-                {format(day, 'MMM d')}
+            <button
+              key={index}
+              className={`
+                py-3 flex flex-col items-center justify-center relative
+                ${_isSelected ? 'bg-dark' : ''}
+                ${_isToday ? 'border-t-2 border-primary' : ''}
+                hover:bg-dark
+              `}
+              onClick={() => handleDaySelect(day)}
+            >
+              <span className={`text-xs mb-1 ${_isToday ? 'text-primary font-semibold' : 'text-light-dark'}`}>
+                {format(day, 'EEE')}
               </span>
-            </div>
+              
+              <span className={`
+                flex items-center justify-center w-8 h-8 rounded-full mb-1
+                ${_isSelected ? 'bg-primary text-light' : ''}
+                ${_isToday && !_isSelected ? 'text-primary' : 'text-light'}
+              `}>
+                {format(day, 'd')}
+              </span>
+              
+              {hasWorkout && (
+                <div className="relative">
+                  <div 
+                    className={`
+                      w-4 h-4 rounded-full flex items-center justify-center text-[8px]
+                      ${completionStatus === 'completed' ? 'bg-green-500 text-dark' : 
+                        completionStatus === 'in-progress' ? 'bg-yellow-500 text-dark' :
+                        'bg-primary text-dark'}
+                    `}
+                  >
+                    {completionStatus === 'completed' ? (
+                      <Check size={10} />
+                    ) : (
+                      exerciseCount
+                    )}
+                  </div>
+                  
+                  {/* Progress ring for in-progress workouts */}
+                  {completionStatus === 'in-progress' && (
+                    <svg 
+                      className="absolute top-0 left-0 transform -rotate-90" 
+                      width="16" 
+                      height="16"
+                    >
+                      <circle
+                        cx="8"
+                        cy="8"
+                        r="6"
+                        stroke="#F59E0B"
+                        strokeWidth="2"
+                        fill="none"
+                        strokeDasharray={`${(getCompletionPercentage(workout) / 100) * 38} 38`}
+                      />
+                    </svg>
+                  )}
+                </div>
+              )}
+            </button>
           );
         })}
       </div>
       
-      {/* Show workout details only for selected day */}
       {selectedDay && (
-        <div className="border-t border-dark mt-2">
+        <div className="p-3 sm:p-4">
+          <h4 className="text-sm font-medium text-light mb-3">
+            {formatGMTDate(selectedDay, 'EEEE, MMMM d, yyyy')}
+          </h4>
+          
           {(() => {
-            const workout = getWorkoutForDate(selectedDay);
-            const hasWorkout = !!workout;
-            const dayName = format(selectedDay, 'EEEE');
-            const dateDisplay = format(selectedDay, 'MMM d');
+            const workout = selectedDay ? getWorkoutForDate(selectedDay) : null;
+            const completionStatus = getWorkoutCompletionStatus(workout);
+            const completionPercentage = getCompletionPercentage(workout);
+            
+            if (!workout) {
+              return (
+                <p className="text-xs text-light-dark py-2">No workout scheduled for this day.</p>
+              );
+            }
             
             return (
-              <div 
-                className={`p-3 sm:p-4 ${
-                  isToday(selectedDay) ? 'bg-primary bg-opacity-10' : hasWorkout ? 'bg-dark' : ''
-                }`}
-              >
-                <div className="flex justify-between items-center mb-4">
-                  <h4 className="font-medium text-sm sm:text-base text-light">{dayName} <span className="text-light-dark text-xs">({dateDisplay})</span></h4>
-                  {hasWorkout ? (
-                    <div className="flex items-center space-x-2">
-                      {workout.recurring && workout.recurring !== 'none' && (
-                        <span className={`text-[10px] sm:text-xs px-2 py-1 rounded-full ${
-                          getRecurringBadgeClass(workout.recurring)
-                        }`}>
-                          {workout.recurring === 'weekly' 
-                            ? 'Weekly' 
-                            : workout.recurring === 'biweekly'
-                            ? 'Biweekly'
-                            : 'Month'}
-                        </span>
-                      )}
-                      <span className="text-[10px] sm:text-xs bg-primary bg-opacity-20 text-primary px-2 py-1 rounded-full">
-                        {workout.exercises.length} exercise{workout.exercises.length !== 1 ? 's' : ''}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center">
+                    <span className="text-xs text-light-dark mr-2">
+                      {workout.exercises.length} exercise{workout.exercises.length !== 1 ? 's' : ''}
+                    </span>
+                    {workout.exercises.some(e => e.recurring && e.recurring !== 'none') && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary bg-opacity-20 text-primary">
+                        Has recurring exercises
                       </span>
-                    </div>
-                  ) : (
-                    <span className="text-[10px] sm:text-xs bg-dark text-light-dark px-2 py-1 rounded-full">
-                      Rest day
+                    )}
+                  </div>
+                  
+                  {completionStatus && (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                      completionStatus === 'completed' 
+                        ? 'bg-green-500 bg-opacity-20 text-green-400' 
+                        : completionStatus === 'in-progress'
+                        ? 'bg-yellow-500 bg-opacity-20 text-yellow-400'
+                        : 'bg-gray-500 bg-opacity-20 text-gray-400'
+                    }`}>
+                      {completionStatus === 'completed' 
+                        ? 'Completed' 
+                        : completionStatus === 'in-progress'
+                        ? `${completionPercentage}% Done`
+                        : 'Not Started'}
                     </span>
                   )}
                 </div>
                 
-                {hasWorkout && (
-                  <div className="space-y-2 sm:space-y-3">
-                    {workout.exercises.map((exercise, index) => (
-                      <div key={index} className="exercise-card flex items-center">
-                        <div className="mr-2 sm:mr-3 bg-primary bg-opacity-20 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center">
-                          {exercise.type === 'Treadmill' || exercise.type === 'Cycling' || 
-                           (exercise.isCustom && !exercise.sets) ? (
-                            <Clock size={16} className="text-primary" />
-                          ) : (
-                            <Dumbbell size={16} className="text-primary" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm sm:text-base text-light truncate">
-                            {exercise.type}
-                            {exercise.isCustom && (
-                              <span className="ml-1 sm:ml-2 text-[10px] sm:text-xs bg-secondary bg-opacity-20 text-secondary px-1 sm:px-2 py-0.5 rounded-full">
-                                Custom
-                              </span>
-                            )}
-                          </p>
-                          {exercise.sets && exercise.reps && (
-                            <p className="text-[10px] sm:text-xs text-light-dark">
-                              {exercise.sets} sets × {exercise.reps} reps
-                            </p>
-                          )}
-                          {exercise.duration && (
-                            <p className="text-[10px] sm:text-xs text-light-dark">
-                              {exercise.duration} minutes
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                {/* Progress bar for exercise completion */}
+                {completionStatus === 'in-progress' && (
+                  <div className="w-full bg-dark h-1 rounded-full mb-3 overflow-hidden">
+                    <div 
+                      className="h-full bg-yellow-500 rounded-full" 
+                      style={{ width: `${completionPercentage}%` }}
+                    ></div>
                   </div>
                 )}
+                
+                <div className="space-y-2">
+                  {workout.exercises.map((exercise, index) => (
+                    <div key={index} className="flex items-center space-x-2 text-xs bg-dark rounded-lg p-2">
+                      {exercise.status === WorkoutStatus.DONE ? (
+                        <div className="w-5 h-5 rounded-full bg-green-500 bg-opacity-20 flex items-center justify-center">
+                          <Check size={12} className="text-green-400" />
+                        </div>
+                      ) : exercise.type === 'Treadmill' || exercise.type === 'Cycling' || 
+                        (exercise.isCustom && !exercise.sets) ? (
+                        <div className="w-5 h-5 rounded-full bg-primary bg-opacity-20 flex items-center justify-center">
+                          <Clock size={12} className="text-primary" />
+                        </div>
+                      ) : (
+                        <div className="w-5 h-5 rounded-full bg-primary bg-opacity-20 flex items-center justify-center">
+                          <Dumbbell size={12} className="text-primary" />
+                        </div>
+                      )}
+                      
+                      <div className="flex-1">
+                        <p className="text-light">
+                          {exercise.type}
+                          {exercise.recurring && exercise.recurring !== 'none' && (
+                            <span className="ml-1 text-[8px] px-1 py-0.5 rounded-full bg-primary bg-opacity-20 text-primary">
+                              {typeof exercise.recurring === 'number'
+                                ? `${exercise.recurring}w`
+                                : ''}
+                            </span>
+                          )}
+                        </p>
+                        {exercise.sets && exercise.reps && (
+                          <p className="text-[10px] text-light-dark">
+                            {exercise.sets} × {exercise.reps}
+                          </p>
+                        )}
+                        {exercise.duration && (
+                          <p className="text-[10px] text-light-dark">
+                            {exercise.duration} min
+                          </p>
+                        )}
+                      </div>
+                      
+                      <div>
+                        <span className={`text-[8px] px-1 py-0.5 rounded-full ${
+                          exercise.status === WorkoutStatus.DONE
+                            ? 'bg-green-500 bg-opacity-20 text-green-400'
+                            : 'bg-yellow-500 bg-opacity-20 text-yellow-400'
+                        }`}>
+                          {exercise.status === WorkoutStatus.DONE ? 'Done' : 'To Do'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             );
           })()}
-        </div>
-      )}
-      
-      {/* Instructions when no day is selected */}
-      {!selectedDay && (
-        <div className="border-t border-dark p-4 text-center mt-2">
-          <p className="text-light-dark text-sm">
-            Select a day to view workout details
-          </p>
         </div>
       )}
     </div>

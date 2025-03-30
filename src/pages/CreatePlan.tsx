@@ -1,41 +1,60 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getWorkoutPlan, saveDateWorkoutPlan } from '../api';
+import { useCustomExercises } from '../context/CustomExercisesContext';
 import WorkoutForm from '../components/WorkoutForm';
 import { DateWorkout } from '../types';
 import { Dumbbell } from 'lucide-react';
+import { useWorkoutPlan, useSaveWorkoutPlan } from '../api/queries';
+import { parseISO, compareAsc } from 'date-fns';
 
 const CreatePlan: React.FC = () => {
   const { user } = useAuth();
+  const { customExercises } = useCustomExercises();
   const navigate = useNavigate();
   const [initialWorkouts, setInitialWorkouts] = useState<DateWorkout[]>([]);
-  const [initialCustomExercises, setInitialCustomExercises] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  useEffect(() => {
-    const fetchWorkoutPlan = async () => {
-      if (!user) return;
-      
-      try {
-        const plan = await getWorkoutPlan(user.id);
-        setInitialWorkouts(plan.workouts);
-        setInitialCustomExercises(plan.customExercises || []);
-      } catch (err) {
-        setError('Failed to load existing workout plan');
-        console.error(err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    fetchWorkoutPlan();
-  }, [user]);
+  // Use React Query for fetching workout plan
+  const { 
+    data: workoutPlanData,
+    isLoading,
+    error: workoutPlanError
+  } = useWorkoutPlan(user?.id || '', user?.planId || '');
 
-  const handleSave = async (workouts: DateWorkout[], customExercises: string[]) => {
+  // Use mutation for saving the workout plan
+  const saveWorkoutPlanMutation = useSaveWorkoutPlan();
+
+  useEffect(() => {
+    // Set initial data once query completes
+    if (workoutPlanData) {
+      // Sort workouts by date before setting them
+      const sortedWorkouts = [...workoutPlanData.workouts].sort((a, b) => 
+        compareAsc(parseISO(a.date), parseISO(b.date))
+      );
+      setInitialWorkouts(sortedWorkouts);
+    }
+  }, [workoutPlanData]);
+
+  // Set error if query fails
+  useEffect(() => {
+    if (workoutPlanError) {
+      setError('Failed to load existing workout plan');
+      console.error(workoutPlanError);
+    }
+  }, [workoutPlanError]);
+
+  const handleSave = async (
+    workouts: DateWorkout[], 
+    customExercises: string[],
+    recurringData: { 
+      recurringWorkoutDates: Record<string, Record<number, string[]>>, 
+      workouts: Record<string, DateWorkout> 
+    },
+    newlyAddedExercises: Record<string, number[]> = {}
+  ) => {
     if (!user) return;
     
     setIsSaving(true);
@@ -43,18 +62,82 @@ const CreatePlan: React.FC = () => {
     setSuccess('');
     
     try {
-      await saveDateWorkoutPlan({
-        userId: user.id,
-        workouts,
-        customExercises
-      });
+      // Pre-process all workouts to include recurring dates
+      const enhancedWorkouts: DateWorkout[] = [];
+      const { recurringWorkoutDates, workouts: workoutsMap } = recurringData;
       
-      setSuccess('Workout plan saved successfully!');
+      // Filter workouts to only include dates with newly added exercises
+      for (const workout of workouts) {
+        const dateString = workout.date;
+        const newIndices = newlyAddedExercises[dateString] || [];
+        
+        // If this date has newly added exercises, include only those exercises
+        if (newIndices.length > 0) {
+          const newExercises = workout.exercises.filter((_, index) => newIndices.includes(index));
+          
+          if (newExercises.length > 0) {
+            enhancedWorkouts.push({
+              date: dateString,
+              exercises: newExercises
+            });
+          }
+        }
+      }
       
-      // Redirect to dashboard after a short delay
-      setTimeout(() => {
-        navigate('/dashboard', { replace: true });
-      }, 1500);
+      // Handle recurring workouts by including their dates in the main workout set
+      for (const baseDate of Object.keys(recurringWorkoutDates)) {
+        const newIndices = newlyAddedExercises[baseDate] || [];
+        
+        for (const exerciseIndexStr of Object.keys(recurringWorkoutDates[baseDate])) {
+          const exerciseIndex = Number(exerciseIndexStr);
+          
+          // Only process recurring workouts for newly added exercises
+          if (newIndices.includes(exerciseIndex)) {
+            const dates = recurringWorkoutDates[baseDate][exerciseIndex];
+            if (dates && dates.length > 0) {
+              // Get the exercise that's recurring
+              const exercise = workoutsMap[baseDate].exercises[exerciseIndex];
+              
+              // For each recurring date, add a new workout or update existing with this exercise
+              for (const date of dates) {
+                // Check if this date already exists in our enhanced workouts
+                const existingWorkoutIndex = enhancedWorkouts.findIndex(w => w.date === date);
+                
+                if (existingWorkoutIndex >= 0) {
+                  // Add this exercise to the existing workout for this date
+                  enhancedWorkouts[existingWorkoutIndex].exercises.push(
+                    { ...exercise, recurring: undefined }  // Remove recurring flag
+                  );
+                } else {
+                  // Create a new workout for this date with just this exercise
+                  enhancedWorkouts.push({
+                    date,
+                    exercises: [{ ...exercise, recurring: undefined }]
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // Only save if there are any newly added exercises
+      if (enhancedWorkouts.length > 0) {
+        // Save all workouts in a single call with the enhanced workouts list
+        await saveWorkoutPlanMutation.mutateAsync({
+          userId: user.id,
+          workouts: enhancedWorkouts,
+          customExercises,
+          planId: user.planId,
+        });
+        
+        setSuccess('Workout plan saved successfully!');
+      } else {
+        setSuccess('No new exercises to save.');
+      }
+      
+      // Redirect to dashboard
+      navigate('/dashboard', { replace: true });
     } catch (err) {
       setError('Failed to save workout plan');
       console.error(err);
@@ -106,7 +189,6 @@ const CreatePlan: React.FC = () => {
         ) : (
           <WorkoutForm 
             initialWorkouts={initialWorkouts}
-            initialCustomExercises={initialCustomExercises}
             onSave={handleSave} 
           />
         )}

@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Link, useNavigationType } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { CustomExercisesProvider } from './context/CustomExercisesContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
@@ -30,8 +31,8 @@ const ScrollToTop = () => {
 const AppContent = () => {
   const location = useLocation();
   const { pathname } = location;
-  const { isAuthenticated } = useAuth();
-  const showMobileNavbar = isAuthenticated && (pathname !== '/signin' && pathname !== '/signup');
+  const { isAuthenticated, isLoading } = useAuth();
+  const showMobileNavbar = isAuthenticated && !isLoading && (pathname !== '/signin' && pathname !== '/signup');
   
   return (
     <div className="min-h-screen flex flex-col">
@@ -81,18 +82,8 @@ const AppContent = () => {
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-dark-light shadow-lg z-40 pb-safe">
           <div className="flex justify-around items-center h-16 px-2">
             <Link 
-              to="/" 
-              className={`flex flex-col items-center justify-center w-1/4 py-2 ${
-                pathname === '/' ? 'text-primary' : 'text-light-dark'
-              }`}
-            >
-              <HomeIcon size={20} />
-              <span className="text-xs mt-1">Home</span>
-            </Link>
-            
-            <Link 
               to="/dashboard" 
-              className={`flex flex-col items-center justify-center w-1/4 py-2 ${
+              className={`flex flex-col items-center justify-center w-1/3 py-2 ${
                 pathname === '/dashboard' ? 'text-primary' : 'text-light-dark'
               }`}
             >
@@ -102,7 +93,7 @@ const AppContent = () => {
             
             <Link 
               to="/workouts" 
-              className={`flex flex-col items-center justify-center w-1/4 py-2 ${
+              className={`flex flex-col items-center justify-center w-1/3 py-2 ${
                 pathname === '/workouts' ? 'text-primary' : 'text-light-dark'
               }`}
             >
@@ -112,7 +103,7 @@ const AppContent = () => {
             
             <Link 
               to="/profile" 
-              className={`flex flex-col items-center justify-center w-1/4 py-2 ${
+              className={`flex flex-col items-center justify-center w-1/3 py-2 ${
                 pathname === '/profile' ? 'text-primary' : 'text-light-dark'
               }`}
             >
@@ -122,9 +113,19 @@ const AppContent = () => {
           </div>
         </div>
       )}
-      <footer className="bg-dark-light text-light py-6 md:mt-0 mt-16">
+      <footer className="bg-dark-light/95 backdrop-blur-sm text-light py-6 md:mt-0 mt-16 border-t border-dark/20 shadow-top">
         <div className="container mx-auto px-4 text-center">
-          <p>&copy; {new Date().getFullYear()} PuulUp. All rights reserved.</p>
+          <div className="flex items-center justify-center space-x-2 text-lg sm:text-xl mb-4 md:mb-2">
+            <div className="relative overflow-hidden rounded-full p-0.5 bg-instagram-gradient shadow-md">
+              <img 
+                src="/puulup-logo.png" 
+                alt="Puulup Logo" 
+                className="h-6 w-auto rounded-full" 
+              />
+            </div>
+            <span className="logo-text text-xl text-primary">PuulUp</span>
+          </div>
+          <p className="text-light-dark text-sm">&copy; {new Date().getFullYear()} PuulUp. All rights reserved.</p>
         </div>
       </footer>
     </div>
@@ -134,9 +135,11 @@ const AppContent = () => {
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <AppContent />
-      </Router>
+      <CustomExercisesProvider>
+        <Router>
+          <AppContent />
+        </Router>
+      </CustomExercisesProvider>
     </AuthProvider>
   );
 }

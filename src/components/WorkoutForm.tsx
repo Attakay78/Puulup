@@ -1,71 +1,167 @@
 import { useState, useEffect } from 'react';
-import { format, parseISO } from 'date-fns';
-import { DateWorkout, Exercise, RecurringType } from '../types';
-import { Plus, X, Dumbbell, Clock, Edit, Save, Repeat, ArrowRight } from 'lucide-react';
+import { format, parseISO, addWeeks } from 'date-fns';
+import { DateWorkout, Exercise, RecurringType, WorkoutStatus } from '../types';
+import { Plus, X, Dumbbell, Clock, Edit, Save, Repeat, ArrowRight, Calendar as CalendarIcon } from 'lucide-react';
 import Calendar from './Calendar';
 import { formatGMTDate, formatGMTDateToISO, getCurrentGMTDate } from '../utils/dateUtils';
+import { useCustomExercises } from '../context/CustomExercisesContext';
 
 const DEFAULT_EXERCISE_TYPES = ['Bench Press', 'Squats', 'Deadlift', 'Treadmill', 'Cycling'] as const;
 
 interface WorkoutFormProps {
   initialWorkouts?: DateWorkout[];
-  initialCustomExercises?: string[];
-  onSave: (workouts: DateWorkout[], customExercises: string[]) => void;
+  onSave: (workouts: DateWorkout[], customExercises: string[], recurringData: { recurringWorkoutDates: Record<string, Record<number, string[]>>, workouts: Record<string, DateWorkout> }, newlyAddedExercises: Record<string, number[]>) => void;
 }
 
 const WorkoutForm: React.FC<WorkoutFormProps> = ({ 
   initialWorkouts = [], 
-  initialCustomExercises = [],
   onSave 
 }) => {
+  // Get custom exercises from context
+  const { customExercises, exerciseTypeMap: contextExerciseTypeMap } = useCustomExercises();
+  
   const [selectedDate, setSelectedDate] = useState<Date>(getCurrentGMTDate());
-  const [workouts, setWorkouts] = useState<Record<string, Exercise[]>>(
-    initialWorkouts.reduce((acc, workout) => {
-      acc[workout.date] = workout.exercises;
-      return acc;
-    }, {} as Record<string, Exercise[]>)
-  );
-  const [recurringSettings, setRecurringSettings] = useState<Record<string, RecurringType>>(
-    initialWorkouts.reduce((acc, workout) => {
-      if (workout.recurring) {
-        acc[workout.date] = workout.recurring;
-      }
-      return acc;
-    }, {} as Record<string, RecurringType>)
-  );
+  const [workouts, setWorkouts] = useState<Record<string, Exercise[]>>({});
 
+  // All state vars related to the current exercise being added
   const [exerciseType, setExerciseType] = useState<string>('Bench Press');
   const [sets, setSets] = useState<number>(3);
   const [reps, setReps] = useState<number>(10);
   const [duration, setDuration] = useState<number>(30);
   const [recurring, setRecurring] = useState<RecurringType>('none');
+  const [recurringWeeks, setRecurringWeeks] = useState<number>(0);
+  const [recurringWeeksInput, setRecurringWeeksInput] = useState<string>("0");
   
   const [setsInput, setSetsInput] = useState<string>("3");
   const [repsInput, setRepsInput] = useState<string>("10");
   const [durationInput, setDurationInput] = useState<string>("30");
   
-  const [customExercises, setCustomExercises] = useState<string[]>(initialCustomExercises);
-  const [newExerciseName, setNewExerciseName] = useState<string>('');
-  const [newExerciseType, setNewExerciseType] = useState<'strength' | 'cardio'>('strength');
-  const [showCustomExerciseForm, setShowCustomExerciseForm] = useState<boolean>(false);
-  
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [exerciseTypeMap, setExerciseTypeMap] = useState<Record<string, 'strength' | 'cardio'>>({});
+  const [newlyAddedExercises, setNewlyAddedExercises] = useState<Record<string, number[]>>({});
+  const [datesWithNewExercises, setDatesWithNewExercises] = useState<string[]>([]);
+
+  // Initialize workouts state from initialWorkouts prop
+  useEffect(() => {
+    if (initialWorkouts.length > 0) {
+      const workoutsMap = initialWorkouts.reduce((acc, workout) => {
+        acc[workout.date] = workout.exercises;
+        return acc;
+      }, {} as Record<string, Exercise[]>);
+      
+      setWorkouts(workoutsMap);
+    }
+  }, [initialWorkouts]);
+
+  // Initialize the exerciseTypeMap based on default and custom exercises
+  useEffect(() => {
+    const typeMap: Record<string, 'strength' | 'cardio'> = {};
+    
+    // Map default exercise types
+    DEFAULT_EXERCISE_TYPES.forEach(type => {
+      if (type === 'Treadmill' || type === 'Cycling') {
+        typeMap[type] = 'cardio';
+      } else {
+        typeMap[type] = 'strength';
+      }
+    });
+    
+    // Process initialWorkouts to identify custom exercise types
+    initialWorkouts.forEach(workout => {
+      workout.exercises.forEach(exercise => {
+        if (exercise.isCustom) {
+          // Determine type based on properties
+          if (exercise.duration && !exercise.sets) {
+            typeMap[exercise.type] = 'cardio';
+          } else {
+            typeMap[exercise.type] = 'strength';
+          }
+        }
+      });
+    });
+    
+    // Add custom exercises from context
+    for (const exerciseName in contextExerciseTypeMap) {
+      typeMap[exerciseName] = contextExerciseTypeMap[exerciseName] as 'strength' | 'cardio';
+    }
+    
+    setExerciseTypeMap(typeMap);
+  }, [initialWorkouts, contextExerciseTypeMap]);
+
+  // Log when step changes to help with debugging
+  useEffect(() => {
+    // Removed console logs
+  }, [currentStep, customExercises, exerciseTypeMap]);
 
   const handleDateSelect = (date: Date) => {
     setSelectedDate(date);
+    
+    // Format the date to match the format used in workouts
+    const dateString = formatGMTDateToISO(date);
+    
+    // Check if there are existing exercises for this date in initialWorkouts
+    const existingWorkout = initialWorkouts.find(workout => workout.date === dateString);
+    
+    if (existingWorkout && existingWorkout.exercises.length > 0) {
+      // If we already have workouts initialized with this date, don't reset exercises
+      if (!workouts[dateString]) {
+        // Add the exercises to the workouts state
+        setWorkouts(prev => ({
+          ...prev,
+          [dateString]: existingWorkout.exercises
+        }));
+      }
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    const formattedWorkouts: DateWorkout[] = Object.keys(workouts).map(date => ({
-      date,
-      exercises: workouts[date],
-      recurring: recurringSettings[date] || 'none'
-    }));
+    // Create base workout objects without recurring info
+    const baseWorkouts: Record<string, DateWorkout> = {};
+    const recurringWorkoutDates: Record<string, Record<number, string[]>> = {};
     
-    onSave(formattedWorkouts, customExercises);
+    // Process each workout date
+    Object.keys(workouts).forEach(date => {
+      // Add the base workout
+      baseWorkouts[date] = {
+        date,
+        exercises: workouts[date]
+      };
+      
+      // Process recurring exercises
+      workouts[date].forEach((exercise, index) => {
+        if (exercise.recurring && exercise.recurring !== 'none') {
+          if (!recurringWorkoutDates[date]) {
+            recurringWorkoutDates[date] = {};
+          }
+          
+          const additionalDates: string[] = [];
+          const baseDate = parseISO(date);
+          
+          // If recurring is a number, add that many weeks
+          if (typeof exercise.recurring === 'number') {
+            for (let i = 1; i <= exercise.recurring; i++) {
+              additionalDates.push(formatGMTDateToISO(addWeeks(baseDate, i)));
+            }
+          }
+          
+          if (additionalDates.length > 0) {
+            recurringWorkoutDates[date][index] = additionalDates;
+          }
+        }
+      });
+    });
+    
+    // Convert to array format and pass all data
+    const formattedWorkouts = Object.values(baseWorkouts);
+    const recurringData = {
+      recurringWorkoutDates,
+      workouts: baseWorkouts
+    };
+    
+    // Pass the newlyAddedExercises tracking state to the parent component
+    onSave(formattedWorkouts, customExercises, recurringData, newlyAddedExercises);
   };
 
   const handleAddExercise = () => {
@@ -74,50 +170,95 @@ const WorkoutForm: React.FC<WorkoutFormProps> = ({
     let exercise: Exercise;
     const isCustomExercise = customExercises.includes(exerciseType);
     
+    // Removed console logs
+    
     const isStrengthExercise = 
       ['Bench Press', 'Squats', 'Deadlift'].includes(exerciseType) || 
       (isCustomExercise && isExerciseStrength(exerciseType));
+    
+    // Removed console logs
     
     if (isStrengthExercise) {
       exercise = {
         type: exerciseType,
         sets,
         reps,
-        isCustom: isCustomExercise
+        status: WorkoutStatus.UNDONE,
+        isCustom: isCustomExercise,
+        recurring: recurring !== 'none' ? recurring : undefined
       };
     } else {
       exercise = {
         type: exerciseType,
         duration,
-        isCustom: isCustomExercise
+        status: WorkoutStatus.UNDONE,
+        isCustom: isCustomExercise,
+        recurring: recurring !== 'none' ? recurring : undefined
       };
     }
     
-    setWorkouts(prev => ({
-      ...prev,
-      [dateString]: [...(prev[dateString] || []), exercise]
-    }));
-    
-    if (recurring !== 'none') {
-      setRecurringSettings(prev => ({
+    // Update workouts state with the new exercise
+    setWorkouts(prev => {
+      const existingExercises = prev[dateString] || [];
+      return {
         ...prev,
-        [dateString]: recurring
-      }));
-    }
+        [dateString]: [...existingExercises, exercise]
+      };
+    });
+    
+    // Track newly added exercise indices
+    setNewlyAddedExercises(prev => {
+      const currentExerciseIndices = prev[dateString] || [];
+      const newIndex = (workouts[dateString]?.length || 0); // The index of the newly added exercise
+      return {
+        ...prev,
+        [dateString]: [...currentExerciseIndices, newIndex]
+      };
+    });
+    
+    // Update the list of dates with newly added exercises
+    setDatesWithNewExercises(prev => {
+      if (!prev.includes(dateString)) {
+        return [...prev, dateString];
+      }
+      return prev;
+    });
   };
 
   const handleRemoveExercise = (date: string, index: number) => {
     const newExercises = [...workouts[date]];
     newExercises.splice(index, 1);
     
+    // Also update the newly added exercises indices
+    setNewlyAddedExercises(prev => {
+      const currentIndices = [...(prev[date] || [])];
+      const updatedIndices = currentIndices
+        .filter(i => i !== index) // Remove the deleted index
+        .map(i => i > index ? i - 1 : i); // Shift down indices that were after the deleted one
+      
+      // If no more newly added exercises for this date, remove the date from tracking
+      if (updatedIndices.length === 0) {
+        setDatesWithNewExercises(dates => dates.filter(d => d !== date));
+      }
+      
+      return {
+        ...prev,
+        [date]: updatedIndices
+      };
+    });
+    
     if (newExercises.length === 0) {
       const newWorkouts = { ...workouts };
       delete newWorkouts[date];
       setWorkouts(newWorkouts);
       
-      const newRecurringSettings = { ...recurringSettings };
-      delete newRecurringSettings[date];
-      setRecurringSettings(newRecurringSettings);
+      // Also clean up the newly added exercises tracking for this date
+      const newlyAdded = { ...newlyAddedExercises };
+      delete newlyAdded[date];
+      setNewlyAddedExercises(newlyAdded);
+      
+      // Remove from dates with new exercises
+      setDatesWithNewExercises(dates => dates.filter(d => d !== date));
     } else {
       setWorkouts({
         ...workouts,
@@ -133,8 +274,19 @@ const WorkoutForm: React.FC<WorkoutFormProps> = ({
     return customExercises.includes(type) && isExerciseStrength(type);
   };
 
-  const isExerciseStrength = (exerciseName: string): boolean => {
-    return exerciseTypeMap[exerciseName] === 'strength';
+  const isExerciseStrength = (type: string): boolean => {
+    // First check our local exercise type map
+    if (exerciseTypeMap[type]) {
+      return exerciseTypeMap[type] === 'strength';
+    }
+    
+    // Then check context exercise type map
+    if (contextExerciseTypeMap[type]) {
+      return contextExerciseTypeMap[type] === 'strength';
+    }
+    
+    // Default to strength for unknown exercise types
+    return true;
   };
 
   const handleSetsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -179,8 +331,20 @@ const WorkoutForm: React.FC<WorkoutFormProps> = ({
     }
   };
   
-  const handleRecurringChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setRecurring(e.target.value as RecurringType);
+  const handleRecurringChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setRecurringWeeksInput(value);
+    
+    if (value === '' || value === '0') {
+      setRecurring('none');
+      setRecurringWeeks(0);
+    } else {
+      const numValue = parseInt(value, 10);
+      if (!isNaN(numValue) && numValue > 0) {
+        setRecurring(numValue);
+        setRecurringWeeks(numValue);
+      }
+    }
   };
   
   const handleInputBlur = (
@@ -197,6 +361,21 @@ const WorkoutForm: React.FC<WorkoutFormProps> = ({
 
   const goToNextStep = () => {
     if (currentStep < 2) {
+      // When going to step 2, prepare the exercises for the selected date if any exist
+      const dateString = formatGMTDateToISO(selectedDate);
+      
+      // Check if there are exercises for this date but not in our current workouts state
+      const existingWorkout = initialWorkouts.find(workout => workout.date === dateString);
+      if (existingWorkout && existingWorkout.exercises.length > 0 && !workouts[dateString]) {
+        // Add the exercises to the workouts state
+        setWorkouts(prev => ({
+          ...prev,
+          [dateString]: existingWorkout.exercises
+        }));
+      }
+      
+      // Removed console log
+      
       setCurrentStep(currentStep + 1);
     }
   };
@@ -208,22 +387,24 @@ const WorkoutForm: React.FC<WorkoutFormProps> = ({
   };
 
   const getRecurringDescription = (type: RecurringType): string => {
-    switch (type) {
-      case 'weekly':
-        return 'This workout will repeat next week (1 additional occurrence)';
-      case 'biweekly':
-        return 'This workout will repeat every other week (2 additional occurrences)';
-      case 'month':
-        return 'This workout will repeat weekly for the next 4 weeks';
-      default:
-        return '';
+    if (type === 'none') {
+      return '';
     }
+    
+    if (typeof type === 'number') {
+      if (type === 1) {
+        return 'This workout will repeat next week (1 additional occurrence)';
+      } else {
+        return `This workout will repeat for the next ${type} weeks`;
+      }
+    }
+    
+    return '';
   };
 
   const workoutsArray: DateWorkout[] = Object.keys(workouts).map(date => ({
     date,
-    exercises: workouts[date],
-    recurring: recurringSettings[date] || 'none'
+    exercises: workouts[date]
   }));
 
   return (
@@ -283,13 +464,15 @@ const WorkoutForm: React.FC<WorkoutFormProps> = ({
             <div className="bg-dark rounded-xl p-3 sm:p-4 mb-6">
               <div className="flex justify-between items-center">
                 <h4 className="text-primary font-medium">Selected Date</h4>
-                <button
-                  type="button"
-                  className="text-light-dark hover:text-primary transition-colors"
-                  onClick={() => setCurrentStep(1)}
-                >
-                  Change
-                </button>
+                <div className="flex items-center">
+                  <button
+                    type="button"
+                    className="text-light-dark hover:text-primary transition-colors"
+                    onClick={() => setCurrentStep(1)}
+                  >
+                    Change
+                  </button>
+                </div>
               </div>
               <p className="text-light text-lg font-medium mt-2">
                 {formatGMTDate(selectedDate, 'EEEE, MMMM d, yyyy')}
@@ -318,31 +501,36 @@ const WorkoutForm: React.FC<WorkoutFormProps> = ({
                     </optgroup>
                     
                     {customExercises.length > 0 && (
-                      <optgroup label="Custom Exercises">
+                      <optgroup label={`Custom Exercises (${customExercises.length})`}>
                         {customExercises.map(type => (
                           <option key={type} value={type}>{type}</option>
                         ))}
                       </optgroup>
                     )}
                   </select>
+                  {customExercises.length === 0 && (
+                    <p className="text-xs text-light-dark mt-1">
+                      You can create custom exercises in your <a href="/profile" className="text-primary hover:underline">profile</a>.
+                    </p>
+                  )}
                 </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-light mb-1.5 flex items-center">
                     <Repeat size={18} className="mr-2 text-primary" />
-                    Make Recurring
+                    Repeat for weeks
                   </label>
                   <div className="relative">
-                    <select
-                      className="input-field text-sm w-full appearance-none cursor-pointer"
-                      value={recurring}
+                    <input
+                      type="number"
+                      className="input-field text-sm w-full"
+                      value={recurringWeeksInput}
                       onChange={handleRecurringChange}
-                    >
-                      <option value="none">None (Single workout)</option>
-                      <option value="weekly">Weekly (Next week only)</option>
-                      <option value="biweekly">Biweekly (Next 2 occurrences)</option>
-                      <option value="month">Month (Next 4 weeks)</option>
-                    </select>
+                      onBlur={() => handleInputBlur(recurringWeeksInput, setRecurringWeeks, setRecurringWeeksInput, 0)}
+                      min="0"
+                      max="12"
+                      placeholder="0 (no repetition)"
+                    />
                   </div>
                   {recurring !== 'none' && (
                     <p className="text-xs text-light-dark mt-1.5">
@@ -401,98 +589,190 @@ const WorkoutForm: React.FC<WorkoutFormProps> = ({
                 onClick={handleAddExercise}
               >
                 <Plus size={16} className="mr-2" />
-                Add Exercise
+                Add Exercise to {formatGMTDate(selectedDate, 'MMM d')}
               </button>
             </div>
             
             <div className="mb-8">
-              <h3 className="text-lg font-semibold mb-4 text-light">Your Workout Plan</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-light">Added Exercises</h3>
+              </div>
               
-              <div className="space-y-4">
-                {Object.keys(workouts).length === 0 ? (
-                  <p className="text-light-dark text-center py-4 bg-dark rounded-xl">
-                    No workouts added yet. Select a date and add exercises to your plan.
-                  </p>
-                ) : (
-                  Object.keys(workouts)
-                    .sort()
-                    .map(date => (
-                      <div key={date} className="bg-dark rounded-xl p-3 sm:p-4">
-                        <div className="flex justify-between items-center mb-3 border-b border-dark-light pb-2">
-                          <div>
-                            <h4 className="font-medium text-base sm:text-lg text-light">
-                              {formatGMTDate(parseISO(date), 'EEE, MMM d, yyyy')}
-                            </h4>
-                            {recurringSettings[date] && recurringSettings[date] !== 'none' && (
-                              <span className={`text-xs ${
-                                recurringSettings[date] === 'weekly' 
-                                  ? 'text-primary' 
-                                  : recurringSettings[date] === 'biweekly'
-                                  ? 'text-secondary'
-                                  : 'text-green-500'
-                              }`}>
-                                {recurringSettings[date] === 'weekly' 
-                                  ? 'Weekly' 
-                                  : recurringSettings[date] === 'biweekly'
-                                  ? 'Biweekly'
-                                  : 'Month'} recurring
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-xs bg-primary bg-opacity-20 text-primary px-2 py-1 rounded-full">
-                            {workouts[date]?.length || 0} exercise{(workouts[date]?.length || 0) !== 1 ? 's' : ''}
-                          </span>
-                        </div>
+              {/* Show newly added exercises for the selected date */}
+              <div className="bg-dark rounded-xl p-3 sm:p-4 mb-4">
+                <div className="flex justify-between items-center mb-3 border-b border-dark-light pb-2">
+                  <div>
+                    <h4 className="font-medium text-base sm:text-lg text-light">
+                      {formatGMTDate(selectedDate, 'EEE, MMM d, yyyy')}
+                    </h4>
+                  </div>
+                </div>
+                
+                {newlyAddedExercises[formatGMTDateToISO(selectedDate)]?.length > 0 ? (
+                  <div className="space-y-2 sm:space-y-3">
+                    {workouts[formatGMTDateToISO(selectedDate)]
+                      .filter((_, index) => 
+                        (newlyAddedExercises[formatGMTDateToISO(selectedDate)] || []).includes(index))
+                      .map((exercise, index) => {
+                        // Need to get the actual index for removal
+                        const actualIndex = (newlyAddedExercises[formatGMTDateToISO(selectedDate)] || [])[index];
                         
-                        {workouts[date]?.length > 0 && (
-                          <div className="space-y-2 sm:space-y-3">
-                            {workouts[date].map((exercise, index) => (
-                              <div key={index} className="flex justify-between items-center bg-dark-light p-2 sm:p-3 rounded-lg border border-dark hover:border-primary transition-all duration-200">
-                                <div className="flex items-center">
-                                  <div className="mr-2 sm:mr-3 bg-primary bg-opacity-20 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center">
-                                    {exercise.type === 'Treadmill' || exercise.type === 'Cycling' || 
-                                     (exercise.isCustom && !exercise.sets) ? (
-                                      <Clock size={16} className="text-primary" />
-                                    ) : (
-                                      <Dumbbell size={16} className="text-primary" />
-                                    )}
-                                  </div>
-                                  <div>
-                                    <p className="font-medium text-light text-sm">
-                                      {exercise.type}
-                                      {exercise.isCustom && (
-                                        <span className="ml-1 sm:ml-2 text-xs bg-secondary bg-opacity-20 text-secondary px-1 sm:px-2 py-0.5 rounded-full">
-                                          Custom
-                                        </span>
-                                      )}
-                                    </p>
-                                    {exercise.sets && exercise.reps && (
-                                      <p className="text-xs text-light-dark">
-                                        {exercise.sets} sets × {exercise.reps} reps
-                                      </p>
-                                    )}
-                                    {exercise.duration && (
-                                      <p className="text-xs text-light-dark">
-                                        {exercise.duration} minutes
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                                
-                                <button
-                                  type="button"
-                                  className="text-light-dark hover:text-secondary"
-                                  onClick={() => handleRemoveExercise(date, index)}
-                                > 
-                                  <X size={18} />
-                                </button>
+                        return (
+                          <div key={`${formatGMTDateToISO(selectedDate)}-${actualIndex}`} 
+                               className="flex justify-between items-center bg-dark-light p-2 sm:p-3 rounded-lg border 
+                                         border-primary hover:border-primary transition-all duration-200">
+                            <div className="flex items-center">
+                              <div className="mr-2 sm:mr-3 bg-primary bg-opacity-20 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center">
+                                {exercise.type === 'Treadmill' || exercise.type === 'Cycling' || 
+                                  (exercise.isCustom && !exercise.sets) ? (
+                                  <Clock size={16} className="text-primary" />
+                                ) : (
+                                  <Dumbbell size={16} className="text-primary" />
+                                )}
                               </div>
-                            ))}
+                              <div>
+                                <p className="font-medium text-light text-sm">
+                                  {exercise.type}
+                                  {exercise.isCustom && (
+                                    <span className="ml-1 sm:ml-2 text-xs bg-secondary bg-opacity-20 text-secondary px-1 sm:px-2 py-0.5 rounded-full">
+                                      Custom
+                                    </span>
+                                  )}
+                                  {exercise.recurring && exercise.recurring !== 'none' && (
+                                    <span className="ml-1 sm:ml-2 text-xs bg-primary bg-opacity-20 text-primary px-1 sm:px-2 py-0.5 rounded-full">
+                                      {typeof exercise.recurring === 'number'
+                                        ? `${exercise.recurring} week${exercise.recurring !== 1 ? 's' : ''}`
+                                        : ''} recurring
+                                    </span>
+                                  )}
+                                </p>
+                                {exercise.sets && exercise.reps && (
+                                  <p className="text-xs text-light-dark">
+                                    {exercise.sets} sets × {exercise.reps} reps
+                                  </p>
+                                )}
+                                {exercise.duration && (
+                                  <p className="text-xs text-light-dark">
+                                    {exercise.duration} minutes
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            
+                            <button
+                              type="button"
+                              className="text-light-dark hover:text-secondary"
+                              onClick={() => handleRemoveExercise(formatGMTDateToISO(selectedDate), actualIndex)}
+                            > 
+                              <X size={18} />
+                            </button>
                           </div>
-                        )}
-                      </div>
-                    ))
+                        );
+                      })}
+                  </div>
+                ) : (
+                  <p className="text-light-dark text-center py-3">
+                    No exercises added to this date yet.
+                  </p>
                 )}
+              </div>
+              
+              {/* Show newly added exercises for all other dates */}
+              {datesWithNewExercises
+                .filter(date => date !== formatGMTDateToISO(selectedDate))
+                .map(dateString => (
+                  <div key={dateString} className="bg-dark rounded-xl p-3 sm:p-4 mb-4">
+                    <div className="flex justify-between items-center mb-3 border-b border-dark-light pb-2">
+                      <div>
+                        <h4 className="font-medium text-base sm:text-lg text-light">
+                          {formatGMTDate(parseISO(dateString), 'EEE, MMM d, yyyy')}
+                        </h4>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          type="button"
+                          className="text-xs bg-secondary bg-opacity-20 text-secondary px-2 py-1 rounded-full"
+                          onClick={() => setSelectedDate(parseISO(dateString))}
+                        >
+                          Select
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2 sm:space-y-3">
+                      {workouts[dateString]
+                        .filter((_, index) => 
+                          (newlyAddedExercises[dateString] || []).includes(index))
+                        .map((exercise, index) => {
+                          // Need to get the actual index for removal
+                          const actualIndex = (newlyAddedExercises[dateString] || [])[index];
+                          
+                          return (
+                            <div key={`${dateString}-${actualIndex}`} 
+                                 className="flex justify-between items-center bg-dark-light p-2 sm:p-3 rounded-lg border 
+                                           border-primary hover:border-primary transition-all duration-200">
+                              <div className="flex items-center">
+                                <div className="mr-2 sm:mr-3 bg-primary bg-opacity-20 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center">
+                                  {exercise.type === 'Treadmill' || exercise.type === 'Cycling' || 
+                                    (exercise.isCustom && !exercise.sets) ? (
+                                    <Clock size={16} className="text-primary" />
+                                  ) : (
+                                    <Dumbbell size={16} className="text-primary" />
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="font-medium text-light text-sm">
+                                    {exercise.type}
+                                    {exercise.isCustom && (
+                                      <span className="ml-1 sm:ml-2 text-xs bg-secondary bg-opacity-20 text-secondary px-1 sm:px-2 py-0.5 rounded-full">
+                                        Custom
+                                      </span>
+                                    )}
+                                    {exercise.recurring && exercise.recurring !== 'none' && (
+                                      <span className="ml-1 sm:ml-2 text-xs bg-primary bg-opacity-20 text-primary px-1 sm:px-2 py-0.5 rounded-full">
+                                        {typeof exercise.recurring === 'number'
+                                          ? `${exercise.recurring} week${exercise.recurring !== 1 ? 's' : ''}`
+                                          : ''} recurring
+                                      </span>
+                                    )}
+                                  </p>
+                                  {exercise.sets && exercise.reps && (
+                                    <p className="text-xs text-light-dark">
+                                      {exercise.sets} sets × {exercise.reps} reps
+                                    </p>
+                                  )}
+                                  {exercise.duration && (
+                                    <p className="text-xs text-light-dark">
+                                      {exercise.duration} minutes
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <button
+                                type="button"
+                                className="text-light-dark hover:text-secondary"
+                                onClick={() => handleRemoveExercise(dateString, actualIndex)}
+                              > 
+                                <X size={18} />
+                              </button>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                ))}
+
+              {/* Button to review all workouts */}
+              <div className="mt-4 flex justify-center">
+                <button
+                  type="button"
+                  className="text-primary text-sm hover:text-secondary transition-colors flex items-center"
+                  onClick={() => setCurrentStep(1)}
+                >
+                  <CalendarIcon className="mr-2" size={14} />
+                  Review full calendar
+                </button>
               </div>
             </div>
             

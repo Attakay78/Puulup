@@ -1,8 +1,9 @@
-import { User, WorkoutPlan, DateWorkoutPlan, DateWorkout, RecurringType, Exercise } from '../types';
+import { User, WorkoutPlan, DateWorkoutPlan, DateWorkout, Exercise, ApiWorkout, ApiExercise, WorkoutStatus, ExerciseType, ApiUserWorkout, ApiWorkoutWithExercises, ApiMultiDateWorkout, ApiGroupedWorkout } from '../types';
 import { formatGMTDateToISO, getCurrentGMTDate } from '../utils/dateUtils';
 
 // Base URL for API requests
-const API_BASE_URL = 'https://karyde.com/gym/api';
+// Using relative URL to work with the proxy configuration in vite.config.ts
+const API_BASE_URL = '/api';
 
 // Helper function for making authenticated API requests
 const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
@@ -21,52 +22,42 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
     },
   };
   
+  try {
   const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
     ...defaultOptions,
     ...options,
     headers: {
       ...defaultOptions.headers,
-      ...(options.headers || {}),
+        ...options.headers,
     },
   });
   
+    // Handle HTTP errors
   if (!response.ok) {
-    // Handle 401 Unauthorized by redirecting to login
+      // Try to get error details from response
+      const errorData = await response.json().catch(() => null);
+      
+      // If not authenticated, clear local storage
     if (response.status === 401) {
       localStorage.removeItem('gymtracker_auth');
-      window.location.href = '/signin';
-      throw new Error('Session expired. Please login again.');
+      }
+      
+      throw new Error(
+        errorData?.detail || `API request failed with status ${response.status}`
+      );
     }
-    
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || 'API request failed');
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error(`API request error for ${endpoint}:`, error);
+    throw error;
   }
-  
-  return response.json();
-};
-
-// Simulate network delay for development
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Generate recurring workout dates
-export const generateRecurringDates = (
-  startDate: string,
-  recurringType: RecurringType,
-): string[] => {
-  if (recurringType === 'none') return [startDate];
-  
-  const dates: string[] = [startDate];
-  
-  // Make API call to generate recurring dates
-  // This is handled on the backend now
-  return dates;
 };
 
 // Signup API
 export const signup = async (userData: Omit<User, 'id'>) => {
   try {
-    await delay(500); // Simulate network delay
-    
     const response = await fetch(`${API_BASE_URL}/users`, {
       method: 'POST',
       headers: {
@@ -97,8 +88,6 @@ export const signup = async (userData: Omit<User, 'id'>) => {
 // Signin API
 export const signin = async (email: string, password: string) => {
   try {
-    await delay(500); // Simulate network delay
-    
     const response = await fetch(`${API_BASE_URL}/token`, {
       method: 'POST',
       headers: {
@@ -121,7 +110,8 @@ export const signin = async (email: string, password: string) => {
         name: data.name,
         email: data.email,
         profileImage: data.profile_image,
-        contact: data.contact || ''
+        contact: data.contact || '',
+        planId: data.plan_id.toString()
       }
     }));
     
@@ -132,7 +122,8 @@ export const signin = async (email: string, password: string) => {
         name: data.name,
         email: data.email,
         profileImage: data.profile_image,
-        contact: data.contact || ''
+        contact: data.contact || '',
+        planId: data.plan_id.toString()
       }
     };
   } catch (error) {
@@ -144,8 +135,6 @@ export const signin = async (email: string, password: string) => {
 // Get user API
 export const getUser = async (id: string) => {
   try {
-    await delay(300); // Simulate network delay
-    
     const userData = await apiRequest('users/me');
     
     return {
@@ -161,53 +150,147 @@ export const getUser = async (id: string) => {
   }
 };
 
-// Get workout plan API
-export const getWorkoutPlan = async (userId: string) => {
+// Update user API
+export const updateUser = async (userData: {
+  name?: string;
+  contact?: string;
+  profileImage?: string;
+}) => {
   try {
-    await delay(300); // Simulate network delay
+    const response = await apiRequest('users/me', {
+      method: 'PUT',
+      body: JSON.stringify({
+        name: userData.name,
+        contact: userData.contact,
+        profile_image: userData.profileImage
+      }),
+    });
     
-    // Get all workout plans for the user
-    const plans = await apiRequest('workout-plans');
-    
-    // If no plans exist, create a default one
-    if (plans.length === 0) {
-      const newPlan = await apiRequest('workout-plans', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: 'My Workout Plan',
-          description: 'Default workout plan'
-        }),
-      });
-      
-      return { 
-        userId, 
-        workouts: [], 
-        customExercises: [] 
-      } as DateWorkoutPlan;
+    // Update the user in localStorage if authentication data exists
+    const authData = localStorage.getItem('gymtracker_auth');
+    if (authData) {
+      const auth = JSON.parse(authData);
+      auth.user = { ...auth.user, ...userData };
+      localStorage.setItem('gymtracker_auth', JSON.stringify(auth));
     }
     
-    // Use the first plan
-    const planId = plans[0].id;
+    return response;
+  } catch (error) {
+    console.error('Update user error:', error);
+    throw error;
+  }
+};
+
+// Fetch all exercises
+export const getAllExercises = async () => {
+  try {
+    return await apiRequest('exercises');
+  } catch (error) {
+    console.error('Get exercises error:', error);
+    throw error;
+  }
+};
+
+// Fetch only custom exercises for the current user
+export const getCustomExercises = async () => {
+  try {
+    return await apiRequest('exercises/custom');
+  } catch (error) {
+    console.error('Get custom exercises error:', error);
+    throw error;
+  }
+};
+
+// Get workout plans
+export const getWorkoutPlans = async () => {
+  try {
+    // Get all workout plans for the user - one should always exist
+    const plans = await apiRequest('workout-plans');
+    // Return the first plan (there should always be one)
+    if (plans.length > 0) {
+      return plans[0];
+    }else {
+      // Else return empty array
+      return [];
+    }
+    
+  } catch (error) {
+    console.error('Get workout plan error:', error);
+    throw new Error('No workout plans found for user');
+  }
+};
+
+// Get workout plan API
+export const getWorkoutPlan = async (userId: string, planId: string) => {
+  try {
     
     // Get all workouts for this plan
     const workouts = await apiRequest(`workouts?plan_id=${planId}`);
+
+    // Get all exercises
+    const allExercises = await getAllExercises();
     
-    // Get all custom exercises
-    const allExercises = await apiRequest('exercises');
+    // Get custom exercises
     const customExercises = allExercises
-      .filter((ex: any) => ex.is_custom)
-      .map((ex: any) => ex.name);
+      .filter((ex: ApiExercise) => ex.is_custom)
+      .map((ex: ApiExercise) => ex.name);
     
-    // Format workouts to match the frontend format
-    const formattedWorkouts = workouts.map((workout: any) => ({
+    // OPTIMIZATION: Instead of fetching user_workouts for each workout individually,
+    // get all user workouts in a single query with workout_ids
+    const workoutIds = workouts.map((w: ApiWorkout) => w.id);
+    let userWorkoutsMap: Map<number, ApiUserWorkout[]> = new Map();
+    
+    if (workoutIds.length > 0) {
+      // Get all user workouts for these workouts in bulk
+      const allUserWorkouts = await apiRequest(`user-workouts`);
+      
+      // Group user workouts by workout_id for faster lookup
+      userWorkoutsMap = allUserWorkouts.reduce((map: Map<number, ApiUserWorkout[]>, uw: ApiUserWorkout) => {
+        if (!map.has(uw.workout_id)) {
+          map.set(uw.workout_id, []);
+        }
+        map.get(uw.workout_id)?.push(uw);
+        return map;
+      }, new Map());
+    }
+    
+    // Format workouts with exercises
+    const formattedWorkouts: DateWorkout[] = workouts.map((workout: ApiWorkout) => {
+      const userWorkouts = userWorkoutsMap.get(workout.id) || [];
+      
+      // Map the exercises with their details
+      const exercises = userWorkouts.map((uw: ApiUserWorkout) => {
+        // Get exercise details
+        const exerciseDetails = allExercises.find((ex: ApiExercise) => ex.id === uw.exercise_id);
+        
+        if (!exerciseDetails) return null;
+        
+        return {
+          id: uw.id,
+          type: exerciseDetails.name,
+          sets: uw.sets,
+          reps: uw.reps,
+          duration: uw.duration,
+          status: uw.status,
+          isCustom: exerciseDetails.is_custom
+        } as Exercise;
+      }).filter(Boolean) as Exercise[];
+      
+      return {
       date: workout.date,
-      exercises: workout.exercises,
-      recurring: workout.recurring
-    }));
+        exercises
+      };
+    });
+    
+    // Convert back to array
+    const newWorkouts = Array.from(formattedWorkouts.values());
+    
+    // Sort workouts by date (chronologically)
+    newWorkouts.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
     return {
       userId,
-      workouts: formattedWorkouts,
+      workouts: newWorkouts,
       customExercises
     } as DateWorkoutPlan;
   } catch (error) {
@@ -225,27 +308,29 @@ export const getWorkoutPlan = async (userId: string) => {
 // Get workouts for a specific date range
 export const getWorkoutsForDateRange = async (userId: string, startDate: string, endDate: string) => {
   try {
-    await delay(300); // Simulate network delay
+    // Use the new optimized endpoint that returns workouts already grouped by date
+    const groupedWorkouts: ApiGroupedWorkout[] = await apiRequest(`workouts-by-date?start_date=${startDate}&end_date=${endDate}`);
     
-    // Get all workout plans for the user
-    const plans = await apiRequest('workout-plans');
-    
-    if (plans.length === 0) {
+    if (!groupedWorkouts || groupedWorkouts.length === 0) {
       return [];
     }
     
-    // Use the first plan
-    const planId = plans[0].id;
-    
-    // Get workouts for the date range
-    const workouts = await apiRequest(`workouts?plan_id=${planId}&start_date=${startDate}&end_date=${endDate}`);
-    
-    // Format workouts to match the frontend format
-    return workouts.map((workout: any) => ({
-      date: workout.date,
-      exercises: workout.exercises,
-      recurring: workout.recurring
+    // The data is already in the format we need with exercises grouped by date
+    // Just format dates as strings to match the expected DateWorkout type
+    const formattedWorkouts = groupedWorkouts.map((workout: ApiGroupedWorkout) => ({
+      date: workout.date, // This is already a string in ISO format
+      exercises: workout.exercises.map((exercise) => ({
+        id: exercise.id,
+        type: exercise.type,
+        sets: exercise.sets,
+        reps: exercise.reps,
+        duration: exercise.duration,
+        status: exercise.status,
+        isCustom: exercise.isCustom
+      }))
     }));
+    
+    return formattedWorkouts;
   } catch (error) {
     console.error('Get workouts for date range error:', error);
     return [];
@@ -255,91 +340,25 @@ export const getWorkoutsForDateRange = async (userId: string, startDate: string,
 // Save workout plan API
 export const saveDateWorkoutPlan = async (workoutPlan: DateWorkoutPlan) => {
   try {
-    await delay(500); // Simulate network delay
+    // Ensure we have a plan ID
+    const planId = workoutPlan.planId;
     
-    // Get or create a workout plan
-    let plans = await apiRequest('workout-plans');
-    let planId: number;
-    
-    if (plans.length === 0) {
-      // Create a new plan
-      const newPlan = await apiRequest('workout-plans', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: 'My Workout Plan',
-          description: 'Custom workout plan'
-        }),
-      });
-      planId = newPlan.id;
-    } else {
-      // Use the first existing plan
-      planId = plans[0].id;
+    // Skip processing if there are no workouts to save
+    if (!workoutPlan.workouts || workoutPlan.workouts.length === 0) {
+      return { success: true };
     }
     
-    // Get existing workouts to determine what to update/delete/create
-    const existingWorkouts = await apiRequest(`workouts?plan_id=${planId}`);
-    const existingWorkoutMap = new Map(existingWorkouts.map((w: any) => [w.date, w]));
-    
-    // Create or update custom exercises
-    if (workoutPlan.customExercises && workoutPlan.customExercises.length > 0) {
-      // Get existing custom exercises
-      const allExercises = await apiRequest('exercises');
-      const existingCustomExercises = new Set(
-        allExercises
-          .filter((ex: any) => ex.is_custom)
-          .map((ex: any) => ex.name)
-      );
-      
-      // Create new custom exercises
-      for (const exerciseName of workoutPlan.customExercises) {
-        if (!existingCustomExercises.has(exerciseName)) {
-          await apiRequest('exercises', {
-            method: 'POST',
-            body: JSON.stringify({
-              name: exerciseName,
-              exercise_type: 'strength' // Default to strength, can be refined later
-            }),
-          });
-        }
-      }
-    }
-    
-    // Process each workout in the plan
-    for (const workout of workoutPlan.workouts) {
-      const existingWorkout = existingWorkoutMap.get(workout.date);
-      
-      if (existingWorkout) {
-        // Update existing workout
-        await apiRequest(`workouts/${existingWorkout.id}`, {
-          method: 'PUT',
-          body: JSON.stringify({
-            exercises: workout.exercises,
-            recurring: workout.recurring
-          }),
-        });
-        
-        // Remove from map to track what's been processed
-        existingWorkoutMap.delete(workout.date);
-      } else {
-        // Create new workout
-        await apiRequest('workouts', {
-          method: 'POST',
-          body: JSON.stringify({
-            plan_id: planId,
-            date: workout.date,
-            exercises: workout.exercises,
-            recurring: workout.recurring
-          }),
-        });
-      }
-    }
-    
-    // Delete workouts that are no longer in the plan
-    for (const [date, workout] of existingWorkoutMap.entries()) {
-      await apiRequest(`workouts/${workout.id}`, {
-        method: 'DELETE',
-      });
-    }
+    // Send the workout plan directly to the multi-date endpoint
+    // The backend can now handle this format directly and allows duplicate exercises
+    await apiRequest('workouts/multi-date', {
+      method: 'POST',
+      body: JSON.stringify({
+        userId: workoutPlan.userId,
+        planId: planId,
+        workouts: workoutPlan.workouts,
+        customExercises: workoutPlan.customExercises || []
+      }),
+    });
     
     return { success: true };
   } catch (error) {
@@ -348,112 +367,172 @@ export const saveDateWorkoutPlan = async (workoutPlan: DateWorkoutPlan) => {
   }
 };
 
-// Add a workout to a specific date with recurring option
+// Helper to map frontend exercises to API format
+async function mapExercisesToApi(exercises: Exercise[], allExercises: ApiExercise[]) {
+  const mappedExercises = [];
+  const exerciseIdsToCreate: Exercise[] = [];
+  
+  // Create a map of exercise names to IDs for faster lookups
+  const exerciseNameToIdMap = new Map<string, number>();
+  allExercises.forEach(ex => {
+    exerciseNameToIdMap.set(ex.name.toLowerCase(), ex.id);
+  });
+  
+  // First, identify exercises that need to be created
+  for (const exercise of exercises) {
+    const exerciseLowerCase = exercise.type.toLowerCase();
+    if (!exerciseNameToIdMap.has(exerciseLowerCase) && exercise.isCustom) {
+      // Check if we've already added this to the creation list (to avoid duplicates)
+      if (!exerciseIdsToCreate.some(e => e.type.toLowerCase() === exerciseLowerCase)) {
+        exerciseIdsToCreate.push(exercise);
+      }
+    }
+  }
+  
+  // Batch create custom exercises if needed
+  let newExercises: ApiExercise[] = [];
+  if (exerciseIdsToCreate.length > 0) {
+    // Since we don't have a proper batch endpoint, we'll create exercises in parallel
+    const createPromises = exerciseIdsToCreate.map(exercise => 
+      apiRequest('exercises', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: exercise.type,
+          exercise_type: exercise.duration ? ExerciseType.CARDIO : ExerciseType.STRENGTH,
+          is_custom: true
+        }),
+      })
+    );
+    
+    // Wait for all exercise creation requests to complete
+    newExercises = await Promise.all(createPromises);
+    
+    // Add new exercises to lookup maps for quick access
+    newExercises.forEach(ex => {
+      exerciseNameToIdMap.set(ex.name.toLowerCase(), ex.id);
+      allExercises.push(ex);
+    });
+  }
+  
+  // Now map all exercises to API format
+  for (const exercise of exercises) {
+    const exerciseLowerCase = exercise.type.toLowerCase();
+    
+    // Get exercise ID from our map (much faster than repeated find operations)
+    const exerciseId = exerciseNameToIdMap.get(exerciseLowerCase);
+    
+    if (!exerciseId) {
+      // Skip this exercise if we couldn't find or create it
+      console.error(`Exercise ${exercise.type} not found and couldn't be created`);
+      continue;
+    }
+    
+    mappedExercises.push({
+      exercise_id: exerciseId,
+      sets: exercise.sets,
+      reps: exercise.reps,
+      duration: exercise.duration,
+      status: exercise.status || WorkoutStatus.UNDONE
+    });
+  }
+  
+  return mappedExercises;
+}
+
+// Add workout API
 export const addWorkout = async (
   userId: string, 
   date: string, 
-  exercises: DateWorkout['exercises'],
-  recurring: RecurringType = 'none'
+  exercises: DateWorkout['exercises']
 ) => {
   try {
-    await delay(300); // Simulate network delay
+    // Get or create first workout plan
+    const plan = await getWorkoutPlans();
+    const planId = plan.id;
     
-    // Get or create a workout plan
-    let plans = await apiRequest('workout-plans');
-    let planId: number;
+    // Get all exercises
+    const allExercises = await getAllExercises();
     
-    if (plans.length === 0) {
-      // Create a new plan
-      const newPlan = await apiRequest('workout-plans', {
+    // Create workout with exercises
+    const workout = await apiRequest('workouts/simple', {
         method: 'POST',
         body: JSON.stringify({
-          name: 'My Workout Plan',
-          description: 'Custom workout plan'
-        }),
-      });
-      planId = newPlan.id;
-    } else {
-      // Use the first existing plan
-      planId = plans[0].id;
-    }
-    
-    // Check if a workout already exists for this date
-    const existingWorkouts = await apiRequest(`workouts?plan_id=${planId}&start_date=${date}&end_date=${date}`);
-    
-    if (existingWorkouts.length > 0) {
-      // Update existing workout
-      const workoutId = existingWorkouts[0].id;
-      await apiRequest(`workouts/${workoutId}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          exercises: exercises,
-          recurring: recurring
-        }),
-      });
-      
-      // If recurring, generate additional workouts
-      if (recurring !== 'none') {
-        await apiRequest('generate-recurring-workouts', {
-          method: 'POST',
-          body: JSON.stringify({
-            workout_id: workoutId
-          }),
-        });
-      }
-    } else {
-      // Create new workout
-      const newWorkout = await apiRequest('workouts', {
-        method: 'POST',
-        body: JSON.stringify({
+        date: date,
           plan_id: planId,
-          date: date,
-          exercises: exercises,
-          recurring: recurring
+        exercises: await mapExercisesToApi(exercises, allExercises)
         }),
       });
       
-      // If recurring, generate additional workouts
-      if (recurring !== 'none') {
-        await apiRequest('generate-recurring-workouts', {
-          method: 'POST',
-          body: JSON.stringify({
-            workout_id: newWorkout.id
-          }),
-        });
-      }
-    }
-    
-    return { success: true };
+    return {
+      date,
+      exercises
+    } as DateWorkout;
   } catch (error) {
     console.error('Add workout error:', error);
     throw error;
   }
 };
 
-// Delete a workout for a specific date
+// Add recurring workouts API
+export const addRecurringWorkouts = async (
+  userId: string,
+  dates: string[],
+  exercises: DateWorkout['exercises']
+) => {
+  try {
+    // Get or create first workout plan
+    const plan = await getWorkoutPlans();
+    const planId = plan.id;
+    
+    // Get all exercises
+    const allExercises = await getAllExercises();
+    
+    // Create workouts for multiple dates
+    const apiExercises = await mapExercisesToApi(exercises, allExercises);
+    
+    const workouts = await apiRequest('workouts/multi-date', {
+      method: 'POST',
+      body: JSON.stringify({
+        dates: dates,
+        plan_id: planId,
+        exercises: apiExercises
+      }),
+    });
+    
+    // Format response
+    return dates.map(date => ({
+      date,
+      exercises
+    })) as DateWorkout[];
+  } catch (error) {
+    console.error('Add recurring workouts error:', error);
+    throw error;
+  }
+};
+
+// Delete workout API
 export const deleteWorkout = async (userId: string, date: string) => {
   try {
-    await delay(300); // Simulate network delay
-    
-    // Get all workout plans for the user
-    const plans = await apiRequest('workout-plans');
-    
-    if (plans.length === 0) {
-      return { success: true }; // No plans, nothing to delete
+    // Get first plan
+    const plan = await getWorkoutPlans();
+    if (!plan) {
+      throw new Error('No workout plans found');
     }
     
-    // Use the first plan
-    const planId = plans[0].id;
+    const planId = plan.id;
     
-    // Find the workout for this date
-    const workouts = await apiRequest(`workouts?plan_id=${planId}&start_date=${date}&end_date=${date}`);
+    // Find the workout by date and plan_id
+    const workouts = await apiRequest(`workouts?plan_id=${planId}`);
+    const workoutToDelete = workouts.find((w: ApiWorkout) => w.date === date);
     
-    if (workouts.length > 0) {
+    if (!workoutToDelete) {
+      throw new Error('Workout not found');
+    }
+    
       // Delete the workout
-      await apiRequest(`workouts/${workouts[0].id}`, {
+    await apiRequest(`workouts/${workoutToDelete.id}`, {
         method: 'DELETE',
       });
-    }
     
     return { success: true };
   } catch (error) {
@@ -462,21 +541,61 @@ export const deleteWorkout = async (userId: string, date: string) => {
   }
 };
 
-// Check if user is authenticated
+// Update workout status
+export const updateWorkoutStatus = async (userId: string, date: string, status: WorkoutStatus) => {
+  try {
+    // Use a simplified, more efficient endpoint that handles this in a single request
+    // The backend will find all workouts for this date that belong to the current user
+    const result = await apiRequest('workouts/update-date-status', {
+      method: 'POST',
+      body: JSON.stringify({
+        date,
+        status
+      }),
+    });
+    
+    return result;
+  } catch (error) {
+    console.error('Update all workouts for date error:', error);
+    throw error;
+  }
+};
+
+// Update a single exercise status
+export const updateExerciseStatus = async (
+  userId: string,
+  exerciseId: number,
+  status: WorkoutStatus
+) => {
+  try {
+    // Update the specific user_workout at the given index
+    await apiRequest(`user-workouts/${exerciseId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        status
+      }),
+    });
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Update exercise status error:', error);
+    throw error;
+  }
+};
+
+// Authentication helpers
 export const isAuthenticated = () => {
-  const auth = localStorage.getItem('gymtracker_auth');
-  return !!auth;
+  const authData = localStorage.getItem('gymtracker_auth');
+  return !!authData;
 };
 
-// Get current user
 export const getCurrentUser = () => {
-  const auth = localStorage.getItem('gymtracker_auth');
-  if (!auth) return null;
+  const authData = localStorage.getItem('gymtracker_auth');
+  if (!authData) return null;
   
-  return JSON.parse(auth).user;
+  return JSON.parse(authData).user;
 };
 
-// Logout
 export const logout = () => {
   localStorage.removeItem('gymtracker_auth');
 };

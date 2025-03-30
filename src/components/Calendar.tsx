@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import ReactCalendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
-import { format, parseISO, addDays } from 'date-fns';
-import { DateWorkout } from '../types';
+import { format, parseISO, addDays, addWeeks, compareAsc } from 'date-fns';
+import { DateWorkout, WorkoutStatus } from '../types';
 import { formatGMTDateToISO, getCurrentGMTDate } from '../utils/dateUtils';
+import { Check } from 'lucide-react';
 
 interface CalendarProps {
   selectedDate: Date;
@@ -12,60 +13,98 @@ interface CalendarProps {
 }
 
 const Calendar: React.FC<CalendarProps> = ({ selectedDate, onDateSelect, workouts }) => {
+  // Sort workouts by date for consistent order
+  const sortedWorkouts = useMemo(() => {
+    return [...workouts].sort((a, b) => compareAsc(parseISO(a.date), parseISO(b.date)));
+  }, [workouts]);
+  
   // Get workout details for a date
   const getWorkoutDetails = (date: Date) => {
     const dateString = formatGMTDateToISO(date);
     
     // First check for direct workout on this date
-    const directWorkout = workouts.find(workout => workout.date === dateString);
+    const directWorkout = sortedWorkouts.find(workout => workout.date === dateString);
     if (directWorkout) return directWorkout;
     
-    // If no direct workout, check for recurring workouts
-    for (const workout of workouts) {
-      const workoutDate = parseISO(workout.date);
-      
-      if (workout.recurring === 'weekly') {
-        // Check if this date is 7 days after the workout
-        const nextDate = addDays(workoutDate, 7);
-        if (format(nextDate, 'yyyy-MM-dd') === dateString) {
-          return workout;
+    // If no direct workout, check for recurring exercises
+    const recurringExercises: DateWorkout['exercises'] = [];
+    
+    for (const workout of sortedWorkouts) {
+      // Process each exercise
+      workout.exercises.forEach(exercise => {
+        if (exercise.recurring && exercise.recurring !== 'none') {
+          const workoutDate = parseISO(workout.date);
+          
+          if (typeof exercise.recurring === 'number') {
+            // Check if this date is within the recurring weeks
+            for (let i = 1; i <= exercise.recurring; i++) {
+              const nextDate = addWeeks(workoutDate, i);
+              if (format(nextDate, 'yyyy-MM-dd') === dateString) {
+                recurringExercises.push(exercise);
+                break;
+              }
+            }
+          }
         }
-      } 
-      else if (workout.recurring === 'biweekly') {
-        // Check if this date is 7 or 14 days after the workout
-        const nextDate1 = addDays(workoutDate, 7);
-        const nextDate2 = addDays(workoutDate, 14);
-        if (format(nextDate1, 'yyyy-MM-dd') === dateString || 
-            format(nextDate2, 'yyyy-MM-dd') === dateString) {
-          return workout;
-        }
-      }
-      else if (workout.recurring === 'month') {
-        // Check if this date is 7, 14, or 21 days after the workout
-        const nextDate1 = addDays(workoutDate, 7);
-        const nextDate2 = addDays(workoutDate, 14);
-        const nextDate3 = addDays(workoutDate, 21);
-        if (format(nextDate1, 'yyyy-MM-dd') === dateString || 
-            format(nextDate2, 'yyyy-MM-dd') === dateString ||
-            format(nextDate3, 'yyyy-MM-dd') === dateString) {
-          return workout;
-        }
-      }
+      });
+    }
+    
+    // If we found recurring exercises, create a synthetic workout
+    if (recurringExercises.length > 0) {
+      return {
+        date: dateString,
+        exercises: recurringExercises
+      };
     }
     
     return null;
   };
 
-  // Custom tile content
+  // Get workout completion status (copied from WeeklyCalendar)
+  const getWorkoutCompletionStatus = (workout: DateWorkout | null) => {
+    if (!workout || workout.exercises.length === 0) return null;
+    
+    const completedExercises = workout.exercises.filter(e => e.status === WorkoutStatus.DONE).length;
+    
+    if (completedExercises === 0) return 'not-started';
+    if (completedExercises === workout.exercises.length) return 'completed';
+    return 'in-progress';
+  };
+
+  // Calculate completion percentage (copied from WeeklyCalendar)
+  const getCompletionPercentage = (workout: DateWorkout | null) => {
+    if (!workout || workout.exercises.length === 0) return 0;
+    
+    const completedExercises = workout.exercises.filter(e => e.status === WorkoutStatus.DONE).length;
+    return Math.round((completedExercises / workout.exercises.length) * 100);
+  };
+
+  // Custom tile content with status colors
   const tileContent = ({ date, view }: { date: Date; view: string }) => {
     if (view !== 'month') return null;
 
     const workout = getWorkoutDetails(date);
     if (!workout) return null;
 
+    const completionStatus = getWorkoutCompletionStatus(workout);
+    const exerciseCount = workout.exercises.length;
+
     return (
       <div className="flex justify-center mt-1">
-        <div className="w-1.5 h-1.5 rounded-full bg-primary"></div>
+        <div 
+          className={`
+            w-4 h-4 rounded-full flex items-center justify-center text-[8px]
+            ${completionStatus === 'completed' ? 'bg-green-500 text-dark' : 
+              completionStatus === 'in-progress' ? 'bg-yellow-500 text-dark' :
+              'bg-primary text-dark'}
+          `}
+        >
+          {completionStatus === 'completed' ? (
+            <Check size={10} />
+          ) : (
+            exerciseCount
+          )}
+        </div>
       </div>
     );
   };
@@ -250,7 +289,11 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDate, onDateSelect, workout
         `}
       </style>
       <ReactCalendar
-        onChange={onDateSelect}
+        onChange={(value: any) => {
+          if (value instanceof Date) {
+            onDateSelect(value);
+          }
+        }}
         value={selectedDate}
         tileContent={tileContent}
         minDetail="month"
@@ -259,9 +302,21 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDate, onDateSelect, workout
         showNeighboringMonth={false}
       />
       <div className="p-3 sm:p-4 border-t border-dark bg-dark bg-opacity-50">
-        <div className="flex items-center space-x-2">
-          <div className="w-1.5 h-1.5 rounded-full bg-primary"></div>
-          <span className="text-xs text-light-dark">Workout scheduled</span>
+        <div className="flex flex-col space-y-2">
+          <div className="flex items-center space-x-2">
+            <div className="w-4 h-4 rounded-full bg-primary"></div>
+            <span className="text-xs text-light-dark">Not started</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-4 h-4 rounded-full bg-yellow-500"></div>
+            <span className="text-xs text-light-dark">In progress</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
+              <Check size={10} className="text-dark" />
+            </div>
+            <span className="text-xs text-light-dark">Completed</span>
+          </div>
         </div>
       </div>
     </div>
