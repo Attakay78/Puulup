@@ -2,110 +2,20 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/puulup-logo.png" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#E1306C" />
     <meta name="description" content="Track your workouts and achieve your fitness goals with PuulUp" />
     
-    <!-- DNS prefetch and preconnect for fonts and API -->
-    <link rel="dns-prefetch" href="https://fonts.googleapis.com">
-    <link rel="dns-prefetch" href="https://fonts.gstatic.com">
-    <link rel="dns-prefetch" href="https://karyde.com">
-    <link rel="preconnect" href="https://karyde.com" crossorigin>
-    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    
-    <!-- Preload critical assets -->
-    <link rel="preload" href="/puulup-logo.png" as="image" type="image/png" fetchpriority="high" />
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Grand+Hotel&display=swap" as="style" />
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" as="style" />
-    
-    <!-- Load preloaded fonts -->
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Grand+Hotel&display=swap" />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" />
-    
     <!-- PWA meta tags -->
     <link rel="manifest" href="/site.webmanifest" />
-    <link rel="apple-touch-icon" href="/puulup-logo.png" />
-    <link rel="mask-icon" href="/puulup-logo.png" color="#E1306C" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <link rel="mask-icon" href="/favicon.svg" color="#E1306C" />
     
     <title>PuulUp - Fitness Tracker</title>
-
-    <!-- Inline critical CSS -->
-    <style>
-      body {
-        margin: 0;
-        font-family: 'Roboto', sans-serif;
-        background-color: #121212;
-        color: #FFFFFF;
-      }
-      .logo-text {
-        font-family: 'Grand Hotel', cursive;
-        font-weight: 400;
-        letter-spacing: 0.02em;
-      }
-      .loading {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100vh;
-        flex-direction: column;
-      }
-      .loading-dots {
-        display: flex;
-        margin-bottom: 1rem;
-      }
-      .loading-dot {
-        width: 0.75rem;
-        height: 0.75rem;
-        border-radius: 9999px;
-        background-color: #E1306C;
-        margin: 0 0.25rem;
-        animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-      }
-      .loading-dot:nth-child(2) {
-        animation-delay: 0.2s;
-      }
-      .loading-dot:nth-child(3) {
-        animation-delay: 0.4s;
-      }
-      @keyframes pulse {
-        0%, 100% {
-          opacity: 1;
-        }
-        50% {
-          opacity: 0.3;
-        }
-      }
-    </style>
   </head>
   <body>
-    <div id="root">
-      <!-- Initial loading state that will be replaced by React -->
-      <div class="loading">
-        <div class="loading-dots">
-          <div class="loading-dot"></div>
-          <div class="loading-dot"></div>
-          <div class="loading-dot"></div>
-        </div>
-        <p style="color: #6C7280; font-size: 0.875rem;">Loading PuulUp...</p>
-      </div>
-    </div>
+    <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    
-    <!-- Service Worker Registration -->
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then(registration => {
-              console.log('ServiceWorker registration successful with scope: ', registration.scope);
-            })
-            .catch(error => {
-              console.log('ServiceWorker registration failed: ', error);
-            });
-        });
-      }
-    </script>
   </body>
 </html>

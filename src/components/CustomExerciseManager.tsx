@@ -3,7 +3,6 @@ import { Plus, X, Dumbbell, Clock, Trash2 } from 'lucide-react';
 import { ExerciseType } from '../types';
 import { getAllExercises, getCustomExercises } from '../api';
 import { useCustomExercises } from '../context/CustomExercisesContext';
-import { API_BASE_URL } from '../api';
 
 interface CustomExerciseManagerProps {
   onExercisesChange?: (exercises: string[]) => void;
@@ -45,7 +44,7 @@ const CustomExerciseManager: React.FC<CustomExerciseManagerProps> = ({
       }
       
       // Create the new exercise using fetch with auth header
-      const response = await fetch(`${API_BASE_URL}/exercises`, {
+      const response = await fetch('/api/exercises', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -106,7 +105,7 @@ const CustomExerciseManager: React.FC<CustomExerciseManagerProps> = ({
       
       if (exerciseToDelete) {
         // Delete the exercise using its ID
-        const response = await fetch(`${API_BASE_URL}/exercises/${exerciseToDelete.id}`, {
+        const response = await fetch(`/api/exercises/${exerciseToDelete.id}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`

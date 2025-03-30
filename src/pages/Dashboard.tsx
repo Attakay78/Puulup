@@ -240,7 +240,7 @@ const Dashboard: React.FC = () => {
                       className={`h-full ${currentWeekCompletionPercentage === 100 ? 'bg-green-500' : 'bg-primary'} rounded-full`} 
                       style={{ width: `${currentWeekCompletionPercentage}%` }}
                     ></div>
-                  </div>
+              </div>
 
                   <div className="text-center mt-4">
                     <Link 
@@ -263,7 +263,7 @@ const Dashboard: React.FC = () => {
                   </Link>
                 </div>
               )}
-            </div>
+              </div>
 
             {/* Today's workout section removed from analytics tab */}
           </div>

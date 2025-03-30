@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Calendar, Activity, ArrowRight } from 'lucide-react';
+import { Calendar, Activity, ArrowRight, Dumbbell } from 'lucide-react';
 
 const Home: React.FC = () => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -64,9 +64,6 @@ const Home: React.FC = () => {
                 src="https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80" 
                 alt="Fitness Training" 
                 className="rounded-3xl shadow-xl transform md:rotate-3 hover:rotate-0 transition-all duration-300"
-                width="800"
-                height="600"
-                loading="eager"
               />
             </div>
           </div>
@@ -87,14 +84,7 @@ const Home: React.FC = () => {
             <div className="card hover:shadow-xl transition-all duration-300 ease-in-out">
               <div className="flex justify-center mb-4 sm:mb-6">
                 <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-primary bg-opacity-20 flex items-center justify-center">
-                  <img 
-                    src="/puulup-logo.png" 
-                    alt="Puulup Logo" 
-                    className="h-8 sm:h-10 w-auto"
-                    width="40"
-                    height="40"
-                    loading="lazy"
-                  />
+                  <Dumbbell size={24} className="text-primary" />
                 </div>
               </div>
               <h3 className="text-lg sm:text-xl font-semibold mb-2 sm:mb-3 text-center text-light">Customized Workouts</h3>

@@ -47,25 +47,5 @@ export default defineConfig({
   ],
   optimizeDeps: {
     exclude: ['lucide-react'],
-  },
-  build: {
-    target: 'esnext',
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: true,
-        ecma: 2020
-      }
-    },
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          ui: ['lucide-react'],
-          tanstack: ['@tanstack/react-query']
-        }
-      }
-    },
-    chunkSizeWarningLimit: 1000
   }
 });
