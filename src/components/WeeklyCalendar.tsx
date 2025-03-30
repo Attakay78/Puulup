@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { format, addDays, isToday as isDayToday, isSameDay, addWeeks, startOfWeek, endOfWeek, parseISO, compareAsc } from 'date-fns';
 import { ChevronLeft, ChevronRight, ChevronDown, Dumbbell, Clock, Check } from 'lucide-react';
 import { DateWorkout, WorkoutStatus, RecurringType } from '../types';
@@ -11,8 +11,10 @@ interface WeeklyCalendarProps {
 }
 
 const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({ weekStart, workouts, onWeekChange }) => {
-  // Generate array of 7 days starting from weekStart
-  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  // Generate array of 7 days starting from weekStart - memoized to prevent recreation on every render
+  const days = useMemo(() => {
+    return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  }, [weekStart]);
   
   // Sort workouts by date for consistent order
   const sortedWorkouts = useMemo(() => {
@@ -27,16 +29,17 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({ weekStart, workouts, on
     setSelectedDay(getCurrentGMTDate());
   }, []);
   
-  const goToPreviousWeek = () => {
+  // Memoize week navigation functions to prevent recreation on each render
+  const goToPreviousWeek = useCallback(() => {
     onWeekChange(addDays(weekStart, -7));
-  };
+  }, [weekStart, onWeekChange]);
   
-  const goToNextWeek = () => {
+  const goToNextWeek = useCallback(() => {
     onWeekChange(addDays(weekStart, 7));
-  };
+  }, [weekStart, onWeekChange]);
   
-  // Get workout for a specific date
-  const getWorkoutForDate = (date: Date) => {
+  // Get workout for a specific date - memoized for performance
+  const getWorkoutForDate = useCallback((date: Date) => {
     const dateString = formatGMTDateToISO(date);
     
     // First check for direct workout on this date
@@ -75,29 +78,29 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({ weekStart, workouts, on
     }
     
     return undefined;
-  };
+  }, [sortedWorkouts]);
   
   // Check if date is today
-  const isToday = (date: Date) => {
+  const isToday = useCallback((date: Date) => {
     const today = getCurrentGMTDate();
     return isSameGMTDay(date, today);
-  };
+  }, []);
   
   // Check if date is selected
-  const isSelected = (date: Date) => {
+  const isSelected = useCallback((date: Date) => {
     return selectedDay && isSameGMTDay(date, selectedDay);
-  };
+  }, [selectedDay]);
   
   // Handle day selection
-  const handleDaySelect = (date: Date) => {
+  const handleDaySelect = useCallback((date: Date) => {
     // Only update if selecting a different day
     if (!selectedDay || !isSameGMTDay(date, selectedDay)) {
       setSelectedDay(date);
     }
-  };
+  }, [selectedDay]);
   
   // Get recurring badge class based on type
-  const getRecurringBadgeClass = (recurring: RecurringType) => {
+  const getRecurringBadgeClass = useCallback((recurring: RecurringType) => {
     if (recurring === 'none') return '';
     
     if (typeof recurring === 'number') {
@@ -111,10 +114,10 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({ weekStart, workouts, on
     }
     
     return '';
-  };
+  }, []);
   
   // Get workout completion status
-  const getWorkoutCompletionStatus = (workout: DateWorkout | null | undefined) => {
+  const getWorkoutCompletionStatus = useCallback((workout: DateWorkout | null | undefined) => {
     if (!workout || workout.exercises.length === 0) return null;
     
     const completedExercises = workout.exercises.filter(e => e.status === WorkoutStatus.DONE).length;
@@ -122,15 +125,15 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({ weekStart, workouts, on
     if (completedExercises === 0) return 'not-started';
     if (completedExercises === workout.exercises.length) return 'completed';
     return 'in-progress';
-  };
+  }, []);
 
   // Calculate completion percentage
-  const getCompletionPercentage = (workout: DateWorkout | null | undefined) => {
+  const getCompletionPercentage = useCallback((workout: DateWorkout | null | undefined) => {
     if (!workout || workout.exercises.length === 0) return 0;
     
     const completedExercises = workout.exercises.filter(e => e.status === WorkoutStatus.DONE).length;
     return Math.round((completedExercises / workout.exercises.length) * 100);
-  };
+  }, []);
   
   return (
     <div className="rounded-xl overflow-hidden bg-dark-light border border-white/5">
@@ -348,4 +351,5 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({ weekStart, workouts, on
   );
 };
 
-export default WeeklyCalendar;
+// Wrap the component with React.memo to avoid unnecessary rerenders
+export default React.memo(WeeklyCalendar);

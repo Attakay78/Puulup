@@ -39,6 +39,10 @@ export const useWorkoutsForDateRange = (userId: string, startDate: Date, endDate
       formatGMTDateToISO(endDate)
     ),
     enabled: !!userId,
+    // Add caching configuration to prevent unnecessary refetches
+    staleTime: 5 * 60 * 1000, // Data stays fresh for 5 minutes
+    gcTime: 30 * 60 * 1000,   // Keep unused data in cache for 30 minutes
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
   });
 };
 

@@ -41,8 +41,15 @@ export default defineConfig({
         ]
       },
       devOptions: {
-        enabled: true
-      }
+        enabled: false
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        globDirectory: 'dist'
+      },
+      strategies: 'injectManifest',
+      filename: 'sw.js',
+      base: '/'
     })
   ],
   optimizeDeps: {

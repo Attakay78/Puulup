@@ -1,12 +1,29 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { DateWorkout, Exercise, WeekRange, WorkoutStatus } from '../types';
-import { Calendar, Dumbbell, Clock, Activity, User, ChevronRight, TrendingUp, Target, Flame, Plus, BarChart3, Check, X } from 'lucide-react';
-import { startOfWeek, endOfWeek, parseISO, compareAsc, isWithinInterval } from 'date-fns';
+import { 
+  Calendar, 
+  Dumbbell, 
+  Clock, 
+  Activity, 
+  User, 
+  ChevronRight, 
+  TrendingUp, 
+  Target, 
+  Flame, 
+  Plus, 
+  BarChart3, 
+  Check, 
+  X, 
+  ListChecks, 
+  CheckCircle 
+} from 'lucide-react';
+import { startOfWeek, endOfWeek, parseISO, compareAsc, isWithinInterval, startOfMonth, endOfMonth, addDays } from 'date-fns';
 import WeeklyCalendar from '../components/WeeklyCalendar';
 import { formatGMTDate, formatGMTDateToISO, getCurrentGMTDate } from '../utils/dateUtils';
-import { useWorkoutPlan, useWorkoutsForDateRange, useUpdateWorkoutStatus, useUpdateExerciseStatus } from '../api/queries';
+import { useWorkoutPlan, useWorkoutsForDateRange, useUpdateWorkoutStatus, useUpdateExerciseStatus, queryKeys } from '../api/queries';
+import { getWorkoutsForDateRange } from '../api/index';
 import { useQueryClient } from '@tanstack/react-query';
 
 // Helper function to calculate remaining duration (exported for testing)
@@ -23,11 +40,12 @@ export const calculateRemainingDuration = (workouts: DateWorkout[]) => {
   }, 0);
 };
 
-type TabType = 'analytics' | 'today' | 'weekly';
+// Update the tab types and their order
+type TabType = 'calendar' | 'today' | 'weekly' | 'monthly';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabType>('analytics');
+  const [activeTab, setActiveTab] = useState<TabType>('calendar');
   const [updatingWorkout, setUpdatingWorkout] = useState<string | null>(null);
   const [updatingExercise, setUpdatingExercise] = useState<{ date: string, index: number } | null>(null);
   const queryClient = useQueryClient();
@@ -36,6 +54,12 @@ const Dashboard: React.FC = () => {
     start: startOfWeek(getCurrentGMTDate(), { weekStartsOn: 0 }),
     end: endOfWeek(getCurrentGMTDate(), { weekStartsOn: 0 })
   });
+  
+  // Get current month name
+  const currentMonthName = formatGMTDate(getCurrentGMTDate(), 'MMMM yyyy');
+  
+  // Get current week range as string
+  const currentWeekRange = `${formatGMTDate(currentWeek.start, 'MMM d')} - ${formatGMTDate(currentWeek.end, 'MMM d, yyyy')}`;
   
   // Use React Query hooks
   const { 
@@ -59,10 +83,12 @@ const Dashboard: React.FC = () => {
   const customExercises = workoutPlanData?.customExercises || [];
 
   
-  // Sort week workouts by date before using them
-  const weekWorkouts = weekWorkoutsData 
-    ? [...weekWorkoutsData].sort((a, b) => compareAsc(parseISO(a.date), parseISO(b.date)))
-    : [];
+  // Sort week workouts by date before using them - memoize to prevent recalculation
+  const weekWorkouts = useMemo(() => {
+    return weekWorkoutsData 
+      ? [...weekWorkoutsData].sort((a, b) => compareAsc(parseISO(a.date), parseISO(b.date)))
+      : [];
+  }, [weekWorkoutsData]);
   
   // Loading and error states
   const isLoading = isWorkoutPlanLoading || isWeekWorkoutsLoading;
@@ -103,12 +129,34 @@ const Dashboard: React.FC = () => {
     });
   };
   
+  // Get current month workouts for analytics
+  const getCurrentMonthWorkouts = () => {
+    const today = getCurrentGMTDate();
+    const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const currentMonthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    
+    return workoutPlan.filter(workout => {
+      const workoutDate = parseISO(workout.date);
+      return isWithinInterval(workoutDate, { 
+        start: currentMonthStart,
+        end: currentMonthEnd
+      });
+    });
+  };
+  
   // Current week workouts for analytics (fixed to the actual current week)
   const currentWeekWorkouts = getCurrentWeekWorkouts();
   const currentWeekWorkoutsCount = currentWeekWorkouts.length;
 
+  // Current month workouts for analytics
+  const currentMonthWorkouts = getCurrentMonthWorkouts();
+  const currentMonthWorkoutsCount = currentMonthWorkouts.length;
+
   // Calculate remaining duration for current week
   const currentWeekRemainingDuration = calculateRemainingDuration(currentWeekWorkouts);
+  
+  // Calculate remaining duration for current month
+  const currentMonthRemainingDuration = calculateRemainingDuration(currentMonthWorkouts);
 
   // Calculate total and completed exercises for current week
   const currentWeekTotalExercises = currentWeekWorkouts.reduce(
@@ -123,9 +171,27 @@ const Dashboard: React.FC = () => {
     0
   );
 
+  // Calculate total and completed exercises for current month
+  const currentMonthTotalExercises = currentMonthWorkouts.reduce(
+    (total, workout) => total + workout.exercises.length, 
+    0
+  );
+  
+  const currentMonthCompletedExercises = currentMonthWorkouts.reduce(
+    (total, workout) => total + workout.exercises.filter(
+      exercise => exercise.status === WorkoutStatus.DONE
+    ).length, 
+    0
+  );
+
   // Calculate completion percentage for current week
   const currentWeekCompletionPercentage = currentWeekTotalExercises > 0 
     ? Math.round((currentWeekCompletedExercises / currentWeekTotalExercises) * 100) 
+    : 0;
+    
+  // Calculate completion percentage for current month
+  const currentMonthCompletionPercentage = currentMonthTotalExercises > 0 
+    ? Math.round((currentMonthCompletedExercises / currentMonthTotalExercises) * 100) 
     : 0;
 
   const getTodayWorkout = () => {
@@ -155,13 +221,66 @@ const Dashboard: React.FC = () => {
     return isCardio ? <Clock size={20} className="text-primary" /> : <Dumbbell size={20} className="text-primary" />;
   };
 
-  const handleWeekChange = (newWeekStart: Date) => {
+  // Memoize the handleWeekChange function to prevent recreating it on every render
+  const handleWeekChange = useCallback((newWeekStart: Date) => {
     const newWeekEnd = endOfWeek(newWeekStart, { weekStartsOn: 0 });
     setCurrentWeek({
       start: newWeekStart,
       end: newWeekEnd
     });
-  };
+  }, []);
+
+  // Prefetch adjacent weeks data for smoother week navigation
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    // Prefetch the next week
+    const nextWeekStart = addDays(currentWeek.start, 7);
+    const nextWeekEnd = endOfWeek(nextWeekStart, { weekStartsOn: 0 });
+    
+    queryClient.prefetchQuery({
+      queryKey: [
+        queryKeys.workoutsForDateRange, 
+        user.id, 
+        formatGMTDateToISO(nextWeekStart), 
+        formatGMTDateToISO(nextWeekEnd)
+      ],
+      queryFn: () => getWorkoutsForDateRange(
+        user.id, 
+        formatGMTDateToISO(nextWeekStart),
+        formatGMTDateToISO(nextWeekEnd)
+      ),
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    });
+    
+    // Prefetch the previous week
+    const prevWeekStart = addDays(currentWeek.start, -7);
+    const prevWeekEnd = endOfWeek(prevWeekStart, { weekStartsOn: 0 });
+    
+    queryClient.prefetchQuery({
+      queryKey: [
+        queryKeys.workoutsForDateRange, 
+        user.id, 
+        formatGMTDateToISO(prevWeekStart), 
+        formatGMTDateToISO(prevWeekEnd)
+      ],
+      queryFn: () => getWorkoutsForDateRange(
+        user.id, 
+        formatGMTDateToISO(prevWeekStart),
+        formatGMTDateToISO(prevWeekEnd)
+      ),
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    });
+  }, [currentWeek.start, user?.id, queryClient]);
+
+  // Memoize the calendar components to prevent unnecessary rerenders
+  const renderCalendarComponent = useMemo(() => (
+    <WeeklyCalendar 
+      weekStart={currentWeek.start}
+      workouts={weekWorkouts as DateWorkout[]}
+      onWeekChange={handleWeekChange}
+    />
+  ), [currentWeek.start, weekWorkouts, handleWeekChange]);
 
   // Handle toggling the entire workout status
   const handleToggleWorkoutStatus = async (workout: DateWorkout) => {
@@ -214,35 +333,251 @@ const Dashboard: React.FC = () => {
 
   const renderMobileContent = () => {
     switch (activeTab) {
-      case 'analytics':
+      case 'calendar':
         return (
           <div className="space-y-6">
-            {/* Upcoming workouts summary */}
+            {/* Calendar section */}
             <div className="card">
-              <h3 className="font-medium text-lg text-light mb-4">This Week's Workouts</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-medium text-lg text-light">Weekly Schedule</h3>
+                  </div>
+              {renderCalendarComponent}
+                  </div>
+                </div>
+        );
+
+      case 'today':
+        return todayWorkout ? (
+              <div className="card">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-medium text-lg text-light">Today's Workout</h3>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs px-2 py-1 rounded-full bg-primary bg-opacity-20 text-primary">
+                      {todayWorkout.exercises.length} exercise{todayWorkout.exercises.length !== 1 ? 's' : ''}
+                    </span>
+                    
+                    {todayCompletionPercentage > 0 && (
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        todayCompletionPercentage === 100 
+                          ? 'bg-green-500 bg-opacity-20 text-green-400' 
+                          : 'bg-yellow-500 bg-opacity-20 text-yellow-400'
+                      }`}>
+                    {todayCompletionPercentage}% Complete
+                      </span>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="space-y-3">
+                  {todayWorkout.exercises.map((exercise, index) => (
+                    <div 
+                  key={`today-${index}`}
+                  className={`exercise-card relative ${
+                    exercise.status === 'Done' ? 'border-green-500/30' : ''
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                      <div className="mr-3">
+                          {renderExerciseIcon(exercise)}
+                </div>
+                        <div>
+                        <h4 className="font-medium text-light">{exercise.type}</h4>
+                        <div className="text-xs text-light-dark mt-1">
+                          {exercise.sets && exercise.reps && (
+                            <span className="mr-2">{exercise.sets} sets × {exercise.reps} reps</span>
+                          )}
+                          {exercise.duration && (
+                            <span className="flex items-center">
+                              <Clock size={12} className="mr-1" />
+                              {exercise.duration} min
+                            </span>
+                          )}
+                        </div>
+              </div>
+            </div>
+
+                      <div className="flex items-center">
+                        <span className={`text-xs px-2 py-1 rounded-full mr-2 ${
+                          exercise.status === WorkoutStatus.DONE
+                            ? 'bg-green-500 bg-opacity-20 text-green-400'
+                            : 'bg-yellow-500 bg-opacity-20 text-yellow-400'
+                        }`}>
+                          {exercise.status === WorkoutStatus.DONE ? 'Done' : 'To Do'}
+                        </span>
+                        <button
+                          onClick={() => handleToggleExerciseStatus(todayWorkout.date, index, exercise)}
+                          disabled={updatingExercise?.date === todayWorkout.date && updatingExercise?.index === index}
+                          className={`p-1.5 rounded-full ${
+                            exercise.status === WorkoutStatus.DONE
+                              ? 'bg-red-500 bg-opacity-20 text-red-400 hover:bg-opacity-30'
+                              : 'bg-green-500 bg-opacity-20 text-green-400 hover:bg-opacity-30'
+                          }`}
+                          title={exercise.status === WorkoutStatus.DONE ? 'Mark as incomplete' : 'Mark as complete'}
+                        >
+                          {updatingExercise?.date === todayWorkout.date && updatingExercise?.index === index ? (
+                            <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin"></div>
+                          ) : exercise.status === WorkoutStatus.DONE ? (
+                            <X size={12} />
+                          ) : (
+                            <Check size={12} />
+                          )}
+                        </button>
+                      </div>
+                      </div>
+                    </div>
+                  ))}
+                  </div>
+                
+            {/* Mark all as complete/incomplete button - Mobile */}
+            <div className="mt-6 text-center">
+                  <button
+                    onClick={() => handleToggleWorkoutStatus(todayWorkout)}
+                    disabled={!!updatingWorkout}
+                    className={`px-4 py-2 rounded-xl text-sm font-medium flex items-center mx-auto ${
+                      todayCompletionPercentage === 100
+                        ? 'bg-red-500 bg-opacity-20 text-red-400 hover:bg-opacity-30'
+                        : 'bg-green-500 bg-opacity-20 text-green-400 hover:bg-opacity-30'
+                    }`}
+                  >
+                    {updatingWorkout === todayWorkout.date ? (
+                  <span className="flex items-center">
+                    <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin mr-2"></div>
+                    Updating...
+                  </span>
+                    ) : todayCompletionPercentage === 100 ? (
+                      <>
+                        <X size={16} className="mr-2" />
+                    Mark All as Incomplete
+                      </>
+                    ) : (
+                      <>
+                        <Check size={16} className="mr-2" />
+                        Mark All as Complete
+                      </>
+                    )}
+                  </button>
+            </div>
+          </div>
+        ) : (
+          <div className="card text-center p-6">
+            <p className="text-light-dark mb-4">No workout scheduled for today</p>
+            <Link 
+              to="/create-plan" 
+              className="bg-instagram-gradient text-white text-sm px-4 py-2 rounded-xl inline-flex items-center"
+            >
+              <Plus size={16} className="mr-2" />
+              Add Workout
+            </Link>
+          </div>
+        );
+
+      case 'weekly':
+        return (
+          <div className="space-y-6">
+            {/* Weekly analytics */}
+            <div className="card">
+              <h3 className="font-medium text-lg text-light mb-1">Weekly Analytics</h3>
+              <p className="text-xs text-light-dark mb-4">{currentWeekRange}</p>
+              
               {currentWeekWorkoutsCount > 0 ? (
                 <>
-                  <div className="flex items-center justify-between text-xs text-light-dark mb-2">
-                    <span>Total workout Days</span>
-                    <span className="text-light">{currentWeekWorkoutsCount}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-light-dark mb-2">
-                    <span>Remaining minutes</span>
-                    <span className="text-light">{currentWeekRemainingDuration} min</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-light-dark mb-4">
-                    <span>Completion</span>
-                    <span className="text-light">{currentWeekCompletionPercentage}%</span>
-                </div>
-                  
-                  <div className="w-full bg-dark h-1.5 rounded-full mb-4 overflow-hidden">
-                    <div 
-                      className={`h-full ${currentWeekCompletionPercentage === 100 ? 'bg-green-500' : 'bg-primary'} rounded-full`} 
-                      style={{ width: `${currentWeekCompletionPercentage}%` }}
-                    ></div>
-              </div>
+                  {/* New modern design for analytics cards */}
+                  <div className="relative bg-gradient-to-br from-dark-light to-dark rounded-xl overflow-hidden p-5 mb-6">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-10 -mt-10 blur-2xl"></div>
+                    <div className="relative z-10">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center space-x-2">
+                          <div className="bg-primary/10 w-8 h-8 rounded-lg flex items-center justify-center">
+                            <BarChart3 size={16} className="text-primary" />
+                          </div>
+                          <h4 className="font-medium text-light">Completion Progress</h4>
+                        </div>
+                        <span className={`text-sm px-2 py-1 rounded-full ${
+                          currentWeekCompletionPercentage === 100 
+                            ? 'bg-green-500/20 text-green-400' 
+                            : currentWeekCompletionPercentage >= 75
+                            ? 'bg-primary/20 text-primary'
+                            : 'bg-yellow-500/20 text-yellow-400'
+                        }`}>
+                          {currentWeekCompletionPercentage}%
+                        </span>
+                      </div>
 
-                  <div className="text-center mt-4">
+                      {/* Progress visualization */}
+                      <div className="w-full bg-dark/50 h-2.5 rounded-full overflow-hidden mb-2">
+                        <div 
+                          className={`h-full ${
+                            currentWeekCompletionPercentage === 100 
+                              ? 'bg-gradient-to-r from-green-500 to-green-400' 
+                              : currentWeekCompletionPercentage >= 75 
+                              ? 'bg-gradient-to-r from-primary to-purple-400' 
+                              : currentWeekCompletionPercentage >= 50 
+                              ? 'bg-gradient-to-r from-yellow-500 to-amber-400' 
+                              : 'bg-gradient-to-r from-orange-500 to-amber-400'
+                          } rounded-full transition-all duration-500 ease-out`}
+                          style={{ width: `${currentWeekCompletionPercentage}%` }}
+                        ></div>
+                      </div>
+                      
+                      <div className="flex items-center justify-between text-xs text-light-dark/80 mb-4">
+                        <div className="flex items-center">
+                          <div className="w-2 h-2 rounded-full bg-green-500 mr-1"></div>
+                          <span>{currentWeekCompletedExercises} completed</span>
+                        </div>
+                        <div className="flex items-center">
+                          <div className="w-2 h-2 rounded-full bg-dark-light mr-1"></div>
+                          <span>{currentWeekTotalExercises - currentWeekCompletedExercises} remaining</span>
+                        </div>
+                      </div>
+
+                      {/* Stats grid */}
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="bg-dark/30 backdrop-blur-sm rounded-lg p-3">
+                          <div className="flex items-center mb-2">
+                            <Calendar size={14} className="text-primary mr-1.5" />
+                            <span className="text-xs text-light-dark">Days</span>
+                          </div>
+                          <p className="text-xl font-bold text-light">{currentWeekWorkoutsCount}</p>
+                          <p className="text-[10px] text-light-dark mt-0.5">of 7 this week</p>
+                        </div>
+                        
+                        <div className="bg-dark/30 backdrop-blur-sm rounded-lg p-3">
+                          <div className="flex items-center mb-2">
+                            <Dumbbell size={14} className="text-blue-400 mr-1.5" />
+                            <span className="text-xs text-light-dark">Exercises</span>
+                          </div>
+                          <p className="text-xl font-bold text-light">{currentWeekTotalExercises}</p>
+                          <p className="text-[10px] text-light-dark mt-0.5">total planned</p>
+                        </div>
+                        
+                        <div className="bg-dark/30 backdrop-blur-sm rounded-lg p-3">
+                          <div className="flex items-center mb-2">
+                            <Clock size={14} className="text-secondary mr-1.5" />
+                            <span className="text-xs text-light-dark">Duration</span>
+                          </div>
+                          <p className="text-xl font-bold text-light">{currentWeekRemainingDuration}</p>
+                          <p className="text-[10px] text-light-dark mt-0.5">mins remaining</p>
+                        </div>
+                      </div>
+                      
+                      {currentWeekCompletionPercentage === 100 && (
+                        <div className="mt-4 text-sm text-green-400 flex items-center justify-center bg-green-500/10 p-2 rounded-lg">
+                          <CheckCircle size={16} className="mr-2" />
+                          Great job! You've completed all exercises this week.
+                        </div>
+                      )}
+                      
+                      {currentWeekCompletionPercentage > 0 && currentWeekCompletionPercentage < 100 && (
+                        <div className="mt-4 text-sm text-primary flex items-center justify-center bg-primary/10 p-2 rounded-lg">
+                          <Activity size={16} className="mr-2" />
+                          Keep going! You're making good progress.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 text-center">
                     <Link 
                       to="/workouts" 
                       className="inline-flex items-center text-primary text-sm hover:text-secondary transition-colors"
@@ -254,6 +589,150 @@ const Dashboard: React.FC = () => {
               ) : (
                 <div className="text-center p-6">
                   <p className="text-light-dark mb-3">No workouts scheduled for this week</p>
+                <Link 
+                  to="/create-plan" 
+                  className="bg-instagram-gradient text-white text-sm px-4 py-2 rounded-xl inline-flex items-center"
+                >
+                  <Plus size={16} className="mr-1" />
+                    Create a Plan
+                </Link>
+              </div>
+            )}
+            </div>
+          </div>
+        );
+
+      case 'monthly':
+        return (
+          <div className="space-y-6">
+            {/* Monthly analytics */}
+          <div className="card">
+              <h3 className="font-medium text-lg text-light mb-1">Monthly Analytics</h3>
+              <p className="text-xs text-light-dark mb-4">{currentMonthName}</p>
+              
+              {currentMonthWorkoutsCount > 0 ? (
+                <>
+                  {/* New modern design for monthly analytics */}
+                  <div className="relative bg-gradient-to-br from-dark-light to-dark rounded-xl overflow-hidden p-5 mb-6">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-10 -mt-10 blur-2xl"></div>
+                    <div className="relative z-10">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center space-x-2">
+                          <div className="bg-primary/10 w-8 h-8 rounded-lg flex items-center justify-center">
+                            <BarChart3 size={16} className="text-primary" />
+                          </div>
+                          <h4 className="font-medium text-light">Monthly Progress</h4>
+                        </div>
+                        <span className={`text-sm px-2 py-1 rounded-full ${
+                          currentMonthCompletionPercentage === 100 
+                            ? 'bg-green-500/20 text-green-400' 
+                            : currentMonthCompletionPercentage >= 75
+                            ? 'bg-primary/20 text-primary'
+                            : 'bg-yellow-500/20 text-yellow-400'
+                        }`}>
+                          {currentMonthCompletionPercentage}%
+                        </span>
+                      </div>
+
+                      {/* Progress visualization */}
+                      <div className="w-full bg-dark/50 h-2.5 rounded-full overflow-hidden mb-2">
+                        <div 
+                          className={`h-full ${
+                            currentMonthCompletionPercentage === 100 
+                              ? 'bg-gradient-to-r from-green-500 to-green-400' 
+                              : currentMonthCompletionPercentage >= 75 
+                              ? 'bg-gradient-to-r from-primary to-purple-400' 
+                              : currentMonthCompletionPercentage >= 50 
+                              ? 'bg-gradient-to-r from-yellow-500 to-amber-400' 
+                              : 'bg-gradient-to-r from-orange-500 to-amber-400'
+                          } rounded-full transition-all duration-500 ease-out`}
+                          style={{ width: `${currentMonthCompletionPercentage}%` }}
+                        ></div>
+                      </div>
+                      
+                      <div className="flex items-center justify-between text-xs text-light-dark/80 mb-4">
+                        <div className="flex items-center">
+                          <div className="w-2 h-2 rounded-full bg-green-500 mr-1"></div>
+                          <span>{currentMonthCompletedExercises} completed</span>
+                        </div>
+                        <div className="flex items-center">
+                          <div className="w-2 h-2 rounded-full bg-dark-light mr-1"></div>
+                          <span>{currentMonthTotalExercises - currentMonthCompletedExercises} remaining</span>
+                        </div>
+                      </div>
+
+                      {/* Stats grid */}
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="bg-dark/30 backdrop-blur-sm rounded-lg p-3">
+                          <div className="flex items-center mb-2">
+                            <Calendar size={14} className="text-primary mr-1.5" />
+                            <span className="text-xs text-light-dark">Days</span>
+                          </div>
+                          <p className="text-xl font-bold text-light">{currentMonthWorkoutsCount}</p>
+                          <p className="text-[10px] text-light-dark mt-0.5">this month</p>
+                        </div>
+                        
+                        <div className="bg-dark/30 backdrop-blur-sm rounded-lg p-3">
+                          <div className="flex items-center mb-2">
+                            <Dumbbell size={14} className="text-blue-400 mr-1.5" />
+                            <span className="text-xs text-light-dark">Exercises</span>
+                          </div>
+                          <p className="text-xl font-bold text-light">{currentMonthTotalExercises}</p>
+                          <p className="text-[10px] text-light-dark mt-0.5">total planned</p>
+                        </div>
+                        
+                        <div className="bg-dark/30 backdrop-blur-sm rounded-lg p-3">
+                          <div className="flex items-center mb-2">
+                            <Clock size={14} className="text-secondary mr-1.5" />
+                            <span className="text-xs text-light-dark">Duration</span>
+                          </div>
+                          <p className="text-xl font-bold text-light">{currentMonthRemainingDuration}</p>
+                          <p className="text-[10px] text-light-dark mt-0.5">mins remaining</p>
+                        </div>
+                      </div>
+                      
+                      {currentMonthCompletionPercentage === 100 && (
+                        <div className="mt-4 text-sm text-green-400 flex items-center justify-center bg-green-500/10 p-2 rounded-lg">
+                          <CheckCircle size={16} className="mr-2" />
+                          Excellent! You've completed all exercises this month.
+                        </div>
+                      )}
+                      
+                      {currentMonthCompletionPercentage >= 75 && currentMonthCompletionPercentage < 100 && (
+                        <div className="mt-4 text-sm text-primary flex items-center justify-center bg-primary/10 p-2 rounded-lg">
+                          <Activity size={16} className="mr-2" />
+                          Almost there! Just a few more exercises to go.
+                        </div>
+                      )}
+                      
+                      {currentMonthCompletionPercentage >= 50 && currentMonthCompletionPercentage < 75 && (
+                        <div className="mt-4 text-sm text-yellow-400 flex items-center justify-center bg-yellow-500/10 p-2 rounded-lg">
+                          <Activity size={16} className="mr-2" />
+                          Good progress! Keep up the momentum.
+                        </div>
+                      )}
+                      
+                      {currentMonthCompletionPercentage > 0 && currentMonthCompletionPercentage < 50 && (
+                        <div className="mt-4 text-sm text-orange-400 flex items-center justify-center bg-orange-500/10 p-2 rounded-lg">
+                          <Activity size={16} className="mr-2" />
+                          You've started! Keep pushing forward.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+            
+                  <div className="mt-4 text-center">
+                    <Link 
+                      to="/workouts" 
+                      className="inline-flex items-center text-primary text-sm hover:text-secondary transition-colors"
+                    >
+                      View All Workouts <ChevronRight size={16} />
+                    </Link>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center p-6">
+                  <p className="text-light-dark mb-3">No workouts scheduled for this month</p>
                   <Link 
                     to="/create-plan" 
                     className="bg-instagram-gradient text-white text-sm px-4 py-2 rounded-xl inline-flex items-center"
@@ -263,203 +742,12 @@ const Dashboard: React.FC = () => {
                   </Link>
                 </div>
               )}
-              </div>
-
-            {/* Today's workout section removed from analytics tab */}
-          </div>
-        );
-
-      case 'today':
-        return todayWorkout ? (
-          <div className="card">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-medium text-lg text-light">Today's Workout</h3>
-              <div className="flex items-center space-x-2">
-                <span className="text-xs px-2 py-1 rounded-full bg-primary bg-opacity-20 text-primary">
-                  {todayWorkout.exercises.length} exercise{todayWorkout.exercises.length !== 1 ? 's' : ''}
-                </span>
-                 
-                {todayCompletionPercentage > 0 && (
-                  <span className={`text-xs px-2 py-1 rounded-full ${
-                    todayCompletionPercentage === 100 
-                      ? 'bg-green-500 bg-opacity-20 text-green-400' 
-                      : 'bg-yellow-500 bg-opacity-20 text-yellow-400'
-                  }`}>
-                    {todayCompletionPercentage}% done
-                </span>
-              )}
-              </div>
-            </div>
-            
-            {/* Progress bar */}
-            {todayCompletionPercentage > 0 && (
-              <div className="w-full bg-dark h-1.5 rounded-full mb-4 overflow-hidden">
-                <div 
-                  className={`h-full rounded-full ${todayCompletionPercentage === 100 ? 'bg-green-500' : 'bg-primary'}`}
-                  style={{ width: `${todayCompletionPercentage}%` }}
-                ></div>
-              </div>
-            )}
-            
-            {/* Display recurring exercises badge */}
-            {todayWorkout.exercises.some(e => e.recurring && e.recurring !== 'none') && (
-              <div className="mb-4 p-2 bg-primary bg-opacity-5 rounded-lg border border-primary border-opacity-10">
-                <span className="text-xs text-primary">
-                  Some exercises in this workout are recurring
-                </span>
-              </div>
-            )}
-            
-            <div className="space-y-3">
-              {todayWorkout.exercises.map((exercise, index) => (
-                <div 
-                  key={index}
-                  className={`flex items-center justify-between bg-dark rounded-xl p-3 ${
-                    exercise.status === WorkoutStatus.DONE ? 'border border-green-500 border-opacity-30' : ''
-                  }`}
-                >
-                  <div className="flex items-center">
-                    <div 
-                      className={`mr-3 ${
-                        exercise.status === WorkoutStatus.DONE 
-                          ? 'bg-green-500 bg-opacity-20' 
-                          : 'bg-primary bg-opacity-20'
-                      } w-10 h-10 rounded-full flex items-center justify-center`}
-                    >
-                      {renderExerciseIcon(exercise)}
-                    </div>
-                    <div>
-                      <p className="font-medium text-light">
-                        {exercise.type}
-                        {exercise.isCustom && (
-                          <span className="ml-2 text-xs bg-secondary bg-opacity-20 text-secondary px-2 py-0.5 rounded-full">
-                            Custom
-                          </span>
-                        )}
-                        {exercise.recurring && exercise.recurring !== 'none' && (
-                          <span className="ml-2 text-xs bg-primary bg-opacity-20 text-primary px-2 py-0.5 rounded-full">
-                            {typeof exercise.recurring === 'number'
-                              ? `${exercise.recurring} week${exercise.recurring !== 1 ? 's' : ''} recurring`
-                              : ''}
-                          </span>
-                        )}
-                      </p>
-                      {exercise.sets && exercise.reps && (
-                        <p className="text-xs text-light-dark">
-                          {exercise.sets} sets × {exercise.reps} reps
-                        </p>
-                      )}
-                      {exercise.duration && (
-                        <p className="text-xs text-light-dark">
-                          {exercise.duration} minutes
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center">
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      exercise.status === WorkoutStatus.DONE
-                        ? 'bg-green-500 bg-opacity-20 text-green-400'
-                        : 'bg-yellow-500 bg-opacity-20 text-yellow-400'
-                    }`}>
-                      {exercise.status === WorkoutStatus.DONE ? 'Done' : 'To Do'}
-                    </span>
-                    <button
-                      onClick={() => handleToggleExerciseStatus(todayWorkout.date, index, exercise)}
-                      disabled={updatingExercise?.date === todayWorkout.date && updatingExercise?.index === index}
-                      className={`ml-2 p-1.5 rounded-full ${
-                        exercise.status === WorkoutStatus.DONE
-                          ? 'bg-red-500 bg-opacity-20 text-red-400 hover:bg-opacity-30'
-                          : 'bg-green-500 bg-opacity-20 text-green-400 hover:bg-opacity-30'
-                      }`}
-                      title={exercise.status === WorkoutStatus.DONE ? 'Mark as incomplete' : 'Mark as complete'}
-                    >
-                      {updatingExercise?.date === todayWorkout.date && updatingExercise?.index === index ? (
-                        <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin"></div>
-                      ) : exercise.status === WorkoutStatus.DONE ? (
-                        <X size={12} />
-                      ) : (
-                        <Check size={12} />
-                      )}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-            
-            {/* Mark all as complete/incomplete button */}
-            <div className="mt-4 text-center">
-              <button
-                onClick={() => handleToggleWorkoutStatus(todayWorkout)}
-                disabled={!!updatingWorkout}
-                className={`px-4 py-2 rounded-xl text-sm font-medium flex items-center mx-auto ${
-                  todayCompletionPercentage === 100
-                    ? 'bg-red-500 bg-opacity-20 text-red-400 hover:bg-opacity-30'
-                    : 'bg-green-500 bg-opacity-20 text-green-400 hover:bg-opacity-30'
-                }`}
-              >
-                {updatingWorkout === todayWorkout.date ? (
-                  <span>Updating...</span>
-                ) : todayCompletionPercentage === 100 ? (
-                  <>
-                    <X size={16} className="mr-2" />
-                    Mark as Incomplete
-                  </>
-                ) : (
-                  <>
-                    <Check size={16} className="mr-2" />
-                    Mark All as Complete
-                  </>
-                )}
-              </button>
-            </div>
-            
-            <div className="text-center mt-4">
-              <Link 
-                to="/workouts" 
-                className="inline-flex items-center text-primary text-sm hover:text-secondary transition-colors"
-              >
-                View All Workouts <ChevronRight size={16} />
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <div className="bg-dark-light rounded-xl p-6 text-center border border-white/5">
-            <div className="bg-primary/10 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
-              <Dumbbell size={24} className="text-primary" />
-            </div>
-            <h3 className="text-light font-medium mb-1">No Workout Today</h3>
-            <p className="text-sm text-light-dark mb-4">Take a rest day or plan a new workout.</p>
-            <Link 
-              to="/create-plan" 
-              className="bg-instagram-gradient text-white text-sm px-4 py-2 rounded-xl inline-flex items-center"
-            >
-              <Plus size={16} className="mr-1" />
-              Plan Workout
-            </Link>
-          </div>
-        );
-
-      case 'weekly':
-        return (
-          <div className="bg-dark-light rounded-xl border border-white/5">
-            <div className="flex items-center justify-between p-4 border-b border-white/5">
-              <h2 className="text-lg font-bold text-light flex items-center">
-                <Calendar size={20} className="text-primary mr-2" />
-                Weekly Schedule
-              </h2>
-            </div>
-            
-            <div className="p-4">
-              <WeeklyCalendar 
-                weekStart={currentWeek.start}
-                workouts={weekWorkouts as DateWorkout[]}
-                onWeekChange={handleWeekChange}
-              />
             </div>
           </div>
         );
+
+      default:
+        return null;
     }
   };
 
@@ -505,41 +793,52 @@ const Dashboard: React.FC = () => {
           </div>
         ) : (
           <>
-            {/* Mobile Tabs - Only visible on mobile */}
+            {/* Mobile Tabs */}
             <div className="md:hidden">
-              <div className="bg-dark-light rounded-xl p-2 flex justify-between mb-6">
+              <div className="bg-dark-light rounded-xl p-2 flex flex-wrap justify-between mb-6">
                 <button
-                  onClick={() => setActiveTab('analytics')}
-                  className={`flex-1 flex items-center justify-center py-2.5 px-4 rounded-lg text-sm font-medium ${
-                    activeTab === 'analytics' 
+                  onClick={() => setActiveTab('calendar')}
+                  className={`flex items-center justify-center py-2 px-2 rounded-lg text-xs font-medium ${
+                    activeTab === 'calendar' 
                       ? 'bg-instagram-gradient text-white' 
                       : 'text-light-dark hover:text-light'
                   }`}
                 >
-                  <BarChart3 size={16} className="mr-2" />
-                  Analytics
+                  <Calendar size={14} className="mr-1" />
+                  Calendar
                 </button>
                 <button
                   onClick={() => setActiveTab('today')}
-                  className={`flex-1 flex items-center justify-center py-2.5 px-4 rounded-lg text-sm font-medium ${
+                  className={`flex items-center justify-center py-2 px-2 rounded-lg text-xs font-medium ${
                     activeTab === 'today' 
                       ? 'bg-instagram-gradient text-white' 
                       : 'text-light-dark hover:text-light'
                   }`}
                 >
-                  <Flame size={16} className="mr-2" />
+                  <Activity size={14} className="mr-1" />
                   Today
                 </button>
                 <button
                   onClick={() => setActiveTab('weekly')}
-                  className={`flex-1 flex items-center justify-center py-2.5 px-4 rounded-lg text-sm font-medium ${
+                  className={`flex items-center justify-center py-2 px-2 rounded-lg text-xs font-medium ${
                     activeTab === 'weekly' 
                       ? 'bg-instagram-gradient text-white' 
                       : 'text-light-dark hover:text-light'
                   }`}
                 >
-                  <Calendar size={16} className="mr-2" />
+                  <BarChart3 size={14} className="mr-1" />
                   Weekly
+                </button>
+                <button
+                  onClick={() => setActiveTab('monthly')}
+                  className={`flex items-center justify-center py-2 px-2 rounded-lg text-xs font-medium ${
+                    activeTab === 'monthly' 
+                      ? 'bg-instagram-gradient text-white' 
+                      : 'text-light-dark hover:text-light'
+                  }`}
+                >
+                  <Calendar size={14} className="mr-1" />
+                  Monthly
                 </button>
               </div>
               
@@ -549,148 +848,416 @@ const Dashboard: React.FC = () => {
             </div>
 
             {/* Desktop Layout - Hidden on mobile */}
-            <div className="hidden md:grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
-              <div className="lg:col-span-8 space-y-4 sm:space-y-6">
-                <div className="grid grid-cols-4 gap-4">
-                  <div className="bg-dark-light rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-white/5">
-                    <div className="flex items-center justify-between mb-2 sm:mb-3">
-                      <div className="bg-primary/10 w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center">
-                        <Calendar size={16} className="text-primary sm:hidden" />
-                        <Calendar size={20} className="text-primary hidden sm:block" />
-                      </div>
-                      <TrendingUp size={14} className="text-primary sm:hidden" />
-                      <TrendingUp size={16} className="text-primary hidden sm:block" />
-                    </div>
-                    <p className="text-lg sm:text-2xl font-bold text-light mb-0.5 sm:mb-1">{currentWeekWorkoutsCount}</p>
-                    <p className="text-[10px] sm:text-xs text-light-dark">This Week's Workouts</p>
+            <div className="hidden md:flex md:flex-col md:space-y-6">
+              {/* Calendar/Weekly Schedule Section */}
+              <div className="bg-dark-light rounded-xl sm:rounded-2xl border border-white/5">
+                <div className="flex items-center justify-between p-4 sm:p-6 border-b border-white/5">
+                  <h2 className="text-lg sm:text-xl font-bold text-light flex items-center">
+                    <Calendar size={20} className="text-primary mr-2 sm:hidden" />
+                    <Calendar size={24} className="text-primary mr-2 hidden sm:block" />
+                    Weekly Schedule
+                  </h2>
                   </div>
 
-                  <div className="bg-dark-light rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-white/5">
-                    <div className="flex items-center justify-between mb-2 sm:mb-3">
-                      <div className="bg-secondary/10 w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center">
-                        <Dumbbell size={16} className="text-secondary sm:hidden" />
-                        <Dumbbell size={20} className="text-secondary hidden sm:block" />
+                <div className="p-4 sm:p-6">
+                  {renderCalendarComponent}
                       </div>
-                      <Target size={14} className="text-secondary sm:hidden" />
-                      <Target size={16} className="text-secondary hidden sm:block" />
-                    </div>
-                    <p className="text-lg sm:text-2xl font-bold text-light mb-0.5 sm:mb-1">{totalExercises}</p>
-                    <p className="text-[10px] sm:text-xs text-light-dark">Total Exercises</p>
                   </div>
 
-                  <div className="bg-dark-light rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-white/5">
-                    <div className="flex items-center justify-between mb-2 sm:mb-3">
-                      <div className="bg-primary/10 w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center">
-                        <Clock size={16} className="text-primary sm:hidden" />
-                        <Clock size={20} className="text-primary hidden sm:block" />
-                      </div>
-                      <Flame size={14} className="text-primary sm:hidden" />
-                      <Flame size={16} className="text-primary hidden sm:block" />
-                    </div>
-                    <p className="text-lg sm:text-2xl font-bold text-light mb-0.5 sm:mb-1" title="Total minutes for remaining exercises">{currentWeekRemainingDuration}</p>
-                    <p className="text-[10px] sm:text-xs text-light-dark">Minutes Remaining</p>
-                  </div>
-
-                  <div className="bg-dark-light rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-white/5">
-                    <div className="flex items-center justify-between mb-2 sm:mb-3">
-                      <div className="bg-green-500/10 w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center">
-                        <Check size={16} className="text-green-500" />
-                      </div>
-                      <Activity size={14} className="text-green-500" />
-                    </div>
-                    <p className={`text-lg sm:text-2xl font-bold ${currentWeekCompletionPercentage === 100 ? 'text-green-500' : 'text-light'} mb-0.5 sm:mb-1`}>{currentWeekCompletionPercentage}%</p>
-                    <p className="text-[10px] sm:text-xs text-light-dark">Completion</p>
-                  </div>
-                </div>
-
-                {/* Today's workout section removed from desktop layout */}
-
+              {/* Today's Workout Section */}
+              {todayWorkout ? (
                 <div className="bg-dark-light rounded-xl sm:rounded-2xl border border-white/5">
                   <div className="flex items-center justify-between p-4 sm:p-6 border-b border-white/5">
-                    <h2 className="text-lg sm:text-xl font-bold text-light flex items-center">
-                      <Calendar size={20} className="text-primary mr-2 sm:hidden" />
-                      <Calendar size={24} className="text-primary mr-2 hidden sm:block" />
-                      Weekly Schedule
-                    </h2>
+                      <h2 className="text-lg sm:text-xl font-bold text-light flex items-center">
+                      <Activity size={20} className="text-primary mr-2 sm:hidden" />
+                      <Activity size={24} className="text-primary mr-2 hidden sm:block" />
+                        Today's Workout
+                      </h2>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs px-2 py-1 rounded-full bg-primary bg-opacity-20 text-primary">
+                        {todayWorkout.exercises.length} exercise{todayWorkout.exercises.length !== 1 ? 's' : ''}
+                      </span>
+                      {todayCompletionPercentage > 0 && (
+                        <span className={`text-xs px-2 py-1 rounded-full ${
+                          todayCompletionPercentage === 100 
+                            ? 'bg-green-500 bg-opacity-20 text-green-400' 
+                            : 'bg-yellow-500 bg-opacity-20 text-yellow-400'
+                        }`}>
+                          {todayCompletionPercentage}% Complete
+                        </span>
+                      )}
+                    </div>
+                      </div>
+                    
+                  <div className="p-4 sm:p-6">
+                    <div className="space-y-3">
+                      {todayWorkout.exercises.map((exercise, index) => (
+                        <div 
+                          key={`today-${index}`}
+                          className={`exercise-card relative ${
+                            exercise.status === 'Done' ? 'border-green-500/30' : ''
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                              <div className="mr-3">
+                              {renderExerciseIcon(exercise)}
+                            </div>
+                            <div>
+                                <h4 className="font-medium text-light">{exercise.type}</h4>
+                                <div className="text-xs text-light-dark mt-1">
+                              {exercise.sets && exercise.reps && (
+                                    <span className="mr-2">{exercise.sets} sets × {exercise.reps} reps</span>
+                              )}
+                              {exercise.duration && (
+                                    <span className="flex items-center">
+                                      <Clock size={12} className="mr-1" />
+                                      {exercise.duration} min
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center">
+                              <span className={`text-xs px-2 py-1 rounded-full mr-2 ${
+                                exercise.status === WorkoutStatus.DONE
+                                  ? 'bg-green-500 bg-opacity-20 text-green-400'
+                                  : 'bg-yellow-500 bg-opacity-20 text-yellow-400'
+                              }`}>
+                                {exercise.status === WorkoutStatus.DONE ? 'Done' : 'To Do'}
+                              </span>
+                              <button
+                                onClick={() => handleToggleExerciseStatus(todayWorkout.date, index, exercise)}
+                                disabled={updatingExercise?.date === todayWorkout.date && updatingExercise?.index === index}
+                                className={`p-1.5 rounded-full ${
+                                  exercise.status === WorkoutStatus.DONE
+                                    ? 'bg-red-500 bg-opacity-20 text-red-400 hover:bg-opacity-30'
+                                    : 'bg-green-500 bg-opacity-20 text-green-400 hover:bg-opacity-30'
+                                }`}
+                                title={exercise.status === WorkoutStatus.DONE ? 'Mark as incomplete' : 'Mark as complete'}
+                              >
+                                {updatingExercise?.date === todayWorkout.date && updatingExercise?.index === index ? (
+                                  <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin"></div>
+                                ) : exercise.status === WorkoutStatus.DONE ? (
+                                  <X size={12} />
+                                ) : (
+                                  <Check size={12} />
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {/* Mark all as complete/incomplete button */}
+                    <div className="mt-6 text-center">
+                      <button
+                        onClick={() => handleToggleWorkoutStatus(todayWorkout)}
+                        disabled={!!updatingWorkout}
+                        className={`px-4 py-2 rounded-xl text-sm font-medium flex items-center mx-auto ${
+                          todayCompletionPercentage === 100
+                            ? 'bg-red-500 bg-opacity-20 text-red-400 hover:bg-opacity-30'
+                            : 'bg-green-500 bg-opacity-20 text-green-400 hover:bg-opacity-30'
+                        }`}
+                      >
+                        {updatingWorkout === todayWorkout.date ? (
+                          <span className="flex items-center">
+                            <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin mr-2"></div>
+                            Updating...
+                          </span>
+                        ) : todayCompletionPercentage === 100 ? (
+                          <>
+                            <X size={16} className="mr-2" />
+                            Mark All as Incomplete
+                          </>
+                        ) : (
+                          <>
+                            <Check size={16} className="mr-2" />
+                            Mark All as Complete
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-dark-light rounded-xl sm:rounded-2xl border border-white/5 text-center p-6">
+                  <p className="text-light-dark mb-4">No workout scheduled for today</p>
+                  <Link 
+                    to="/create-plan" 
+                    className="bg-instagram-gradient text-white text-sm px-4 py-2 rounded-xl inline-flex items-center"
+                  >
+                    <Plus size={16} className="mr-2" />
+                    Add Workout
+                  </Link>
+                  </div>
+                )}
+
+              {/* Weekly Analytics */}
+                <div className="bg-dark-light rounded-xl sm:rounded-2xl border border-white/5">
+                  <div className="flex items-center justify-between p-4 sm:p-6 border-b border-white/5">
+                    <div>
+                      <h2 className="text-lg sm:text-xl font-bold text-light flex items-center">
+                        <BarChart3 size={20} className="text-primary mr-2 sm:hidden" />
+                        <BarChart3 size={24} className="text-primary mr-2 hidden sm:block" />
+                        Weekly Analytics
+                      </h2>
+                      <p className="text-xs text-light-dark mt-1">{currentWeekRange}</p>
+                    </div>
                   </div>
                   
                   <div className="p-4 sm:p-6">
-                    <WeeklyCalendar 
-                      weekStart={currentWeek.start}
-                      workouts={weekWorkouts as DateWorkout[]}
-                      onWeekChange={handleWeekChange}
-                    />
+                  {currentWeekWorkoutsCount > 0 ? (
+                    <div className="space-y-4 sm:space-y-6">
+                      {/* Desktop Weekly Analytics - New Modern Design */}
+                      <div className="relative bg-gradient-to-br from-dark-light to-dark rounded-xl overflow-hidden p-5">
+                        <div className="absolute top-0 right-0 w-40 h-40 bg-primary/5 rounded-full -mr-10 -mt-10 blur-2xl"></div>
+                        <div className="relative z-10">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center space-x-2">
+                              <div className="bg-primary/10 w-8 h-8 rounded-lg flex items-center justify-center">
+                                <BarChart3 size={16} className="text-primary" />
+                              </div>
+                              <h4 className="font-medium text-light">Completion Progress</h4>
+                            </div>
+                            <span className={`text-sm px-2 py-1 rounded-full ${
+                              currentWeekCompletionPercentage === 100 
+                                ? 'bg-green-500/20 text-green-400' 
+                                : currentWeekCompletionPercentage >= 75
+                                ? 'bg-primary/20 text-primary'
+                                : 'bg-yellow-500/20 text-yellow-400'
+                            }`}>
+                              {currentWeekCompletionPercentage}%
+                            </span>
+                          </div>
+
+                          {/* Progress visualization */}
+                          <div className="w-full bg-dark/50 h-2.5 rounded-full overflow-hidden mb-2">
+                            <div 
+                              className={`h-full ${
+                                currentWeekCompletionPercentage === 100 
+                                  ? 'bg-gradient-to-r from-green-500 to-green-400' 
+                                  : currentWeekCompletionPercentage >= 75 
+                                  ? 'bg-gradient-to-r from-primary to-purple-400' 
+                                  : currentWeekCompletionPercentage >= 50 
+                                  ? 'bg-gradient-to-r from-yellow-500 to-amber-400' 
+                                  : 'bg-gradient-to-r from-orange-500 to-amber-400'
+                              } rounded-full transition-all duration-500 ease-out`}
+                              style={{ width: `${currentWeekCompletionPercentage}%` }}
+                            ></div>
+                          </div>
+                          
+                          <div className="flex items-center justify-between text-xs text-light-dark/80 mb-4">
+                            <div className="flex items-center">
+                              <div className="w-2 h-2 rounded-full bg-green-500 mr-1"></div>
+                              <span>{currentWeekCompletedExercises} completed</span>
+                            </div>
+                            <div className="flex items-center">
+                              <div className="w-2 h-2 rounded-full bg-dark-light mr-1"></div>
+                              <span>{currentWeekTotalExercises - currentWeekCompletedExercises} remaining</span>
+                            </div>
+                          </div>
+
+                          {/* Stats grid */}
+                          <div className="grid grid-cols-3 gap-3">
+                            <div className="bg-dark/30 backdrop-blur-sm rounded-lg p-3">
+                              <div className="flex items-center mb-2">
+                                <Calendar size={14} className="text-primary mr-1.5" />
+                                <span className="text-xs text-light-dark">Days</span>
+                              </div>
+                              <p className="text-xl font-bold text-light">{currentWeekWorkoutsCount}</p>
+                              <p className="text-[10px] text-light-dark mt-0.5">of 7 this week</p>
+                            </div>
+                            
+                            <div className="bg-dark/30 backdrop-blur-sm rounded-lg p-3">
+                              <div className="flex items-center mb-2">
+                                <Dumbbell size={14} className="text-blue-400 mr-1.5" />
+                                <span className="text-xs text-light-dark">Exercises</span>
+                              </div>
+                              <p className="text-xl font-bold text-light">{currentWeekTotalExercises}</p>
+                              <p className="text-[10px] text-light-dark mt-0.5">total planned</p>
+                            </div>
+                            
+                            <div className="bg-dark/30 backdrop-blur-sm rounded-lg p-3">
+                              <div className="flex items-center mb-2">
+                                <Clock size={14} className="text-secondary mr-1.5" />
+                                <span className="text-xs text-light-dark">Duration</span>
+                              </div>
+                              <p className="text-xl font-bold text-light">{currentWeekRemainingDuration}</p>
+                              <p className="text-[10px] text-light-dark mt-0.5">mins remaining</p>
+                            </div>
+                          </div>
+                          
+                          {currentWeekCompletionPercentage === 100 && (
+                            <div className="mt-4 text-sm text-green-400 flex items-center justify-center bg-green-500/10 p-2 rounded-lg">
+                              <CheckCircle size={16} className="mr-2" />
+                              Great job! You've completed all exercises this week.
+                            </div>
+                          )}
+                          
+                          {currentWeekCompletionPercentage > 0 && currentWeekCompletionPercentage < 100 && (
+                            <div className="mt-4 text-sm text-primary flex items-center justify-center bg-primary/10 p-2 rounded-lg">
+                              <Activity size={16} className="mr-2" />
+                              Keep going! You're making good progress.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-light-dark mb-4">No workouts scheduled for this week</p>
+                    <Link 
+                        to="/create-plan" 
+                        className="bg-instagram-gradient text-white text-sm px-4 py-2 rounded-xl inline-flex items-center"
+                    >
+                        <Plus size={16} className="mr-2" />
+                        Create a Plan
+                    </Link>
+                    </div>
+                  )}
                   </div>
                 </div>
-              </div>
 
-              <div className="lg:col-span-4 space-y-4 sm:space-y-6">
-                <div className="bg-dark-light rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-white/5">
-                  <div className="flex items-center space-x-3 sm:space-x-4 mb-4 sm:mb-6">
-                    {user?.profileImage ? (
-                      <img 
-                        src={user.profileImage} 
-                        alt={user.name} 
-                        className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl object-cover border-2 border-primary/20"
-                      />
-                    ) : (
-                      <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl bg-primary/10 flex items-center justify-center">
-                        <User size={20} className="text-primary sm:hidden" />
-                        <User size={24} className="text-primary hidden sm:block" />
-                      </div>
-                    )}
-                    <div>
-                      <h2 className="text-base sm:text-lg font-semibold text-light">{user?.name}</h2>
-                      <p className="text-xs sm:text-sm text-light-dark">{user?.email}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-3 sm:space-y-4">
-                    <div className="bg-dark rounded-lg sm:rounded-xl p-3 sm:p-4 border border-white/5">
-                      <p className="text-xs sm:text-sm text-light-dark mb-1">Contact</p>
-                      <p className="text-sm sm:text-base text-light">{user?.contact}</p>
-                    </div>
-                    
-                    <Link 
-                      to="/profile" 
-                      className="bg-primary/10 text-primary hover:bg-primary/20 transition-colors w-full flex items-center justify-center px-3 sm:px-4 py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium"
-                    >
-                      View Profile
-                    </Link>
+              {/* Monthly Analytics Section */}
+              <div className="bg-dark-light rounded-xl sm:rounded-2xl border border-white/5">
+                <div className="flex items-center justify-between p-4 sm:p-6 border-b border-white/5">
+                  <div>
+                    <h2 className="text-lg sm:text-xl font-bold text-light flex items-center">
+                      <Calendar size={20} className="text-primary mr-2 sm:hidden" />
+                      <Calendar size={24} className="text-primary mr-2 hidden sm:block" />
+                      Monthly Progress
+                    </h2>
+                    <p className="text-xs text-light-dark mt-1">{currentMonthName}</p>
                   </div>
                 </div>
+                
+                <div className="p-4 sm:p-6">
+                  {currentMonthWorkoutsCount > 0 ? (
+                    <div className="space-y-4 sm:space-y-6">
+                      {/* Desktop Monthly Analytics - New Modern Design */}
+                      <div className="relative bg-gradient-to-br from-dark-light to-dark rounded-xl overflow-hidden p-5">
+                        <div className="absolute top-0 right-0 w-40 h-40 bg-primary/5 rounded-full -mr-10 -mt-10 blur-2xl"></div>
+                        <div className="relative z-10">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center space-x-2">
+                              <div className="bg-primary/10 w-8 h-8 rounded-lg flex items-center justify-center">
+                                <BarChart3 size={16} className="text-primary" />
+                              </div>
+                              <h4 className="font-medium text-light">Monthly Progress</h4>
+                            </div>
+                            <span className={`text-sm px-2 py-1 rounded-full ${
+                              currentMonthCompletionPercentage === 100 
+                                ? 'bg-green-500/20 text-green-400' 
+                                : currentMonthCompletionPercentage >= 75
+                                ? 'bg-primary/20 text-primary'
+                                : 'bg-yellow-500/20 text-yellow-400'
+                            }`}>
+                              {currentMonthCompletionPercentage}%
+                            </span>
+                          </div>
 
-                <div className="bg-dark-light rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-white/5">
-                  <h3 className="text-base sm:text-lg font-semibold text-light mb-3  sm:mb-4">Quick Actions</h3>
-                  <div className="space-y-2 sm:space-y-3">
-                    <Link 
-                      to="/workouts" 
-                      className="bg-dark hover:bg-dark-light transition-colors flex items-center p-3 sm:p-4 rounded-lg sm:rounded-xl border border-white/5 hover:border-primary/20"
-                    >
-                      <div className="bg-primary/10 w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center mr-3">
-                        <Dumbbell size={16} className="text-primary sm:hidden" />
-                        <Dumbbell size={20} className="text-primary hidden sm:block" />
+                          {/* Progress visualization */}
+                          <div className="w-full bg-dark/50 h-2.5 rounded-full overflow-hidden mb-2">
+                            <div 
+                              className={`h-full ${
+                                currentMonthCompletionPercentage === 100 
+                                  ? 'bg-gradient-to-r from-green-500 to-green-400' 
+                                  : currentMonthCompletionPercentage >= 75 
+                                  ? 'bg-gradient-to-r from-primary to-purple-400' 
+                                  : currentMonthCompletionPercentage >= 50 
+                                  ? 'bg-gradient-to-r from-yellow-500 to-amber-400' 
+                                  : 'bg-gradient-to-r from-orange-500 to-amber-400'
+                              } rounded-full transition-all duration-500 ease-out`}
+                              style={{ width: `${currentMonthCompletionPercentage}%` }}
+                            ></div>
+                          </div>
+                          
+                          <div className="flex items-center justify-between text-xs text-light-dark/80 mb-4">
+                            <div className="flex items-center">
+                              <div className="w-2 h-2 rounded-full bg-green-500 mr-1"></div>
+                              <span>{currentMonthCompletedExercises} completed</span>
+                            </div>
+                            <div className="flex items-center">
+                              <div className="w-2 h-2 rounded-full bg-dark-light mr-1"></div>
+                              <span>{currentMonthTotalExercises - currentMonthCompletedExercises} remaining</span>
+                            </div>
+                          </div>
+
+                          {/* Stats grid */}
+                          <div className="grid grid-cols-3 gap-3">
+                            <div className="bg-dark/30 backdrop-blur-sm rounded-lg p-3">
+                              <div className="flex items-center mb-2">
+                                <Calendar size={14} className="text-primary mr-1.5" />
+                                <span className="text-xs text-light-dark">Days</span>
+                              </div>
+                              <p className="text-xl font-bold text-light">{currentMonthWorkoutsCount}</p>
+                              <p className="text-[10px] text-light-dark mt-0.5">this month</p>
+                            </div>
+                            
+                            <div className="bg-dark/30 backdrop-blur-sm rounded-lg p-3">
+                              <div className="flex items-center mb-2">
+                                <Dumbbell size={14} className="text-blue-400 mr-1.5" />
+                                <span className="text-xs text-light-dark">Exercises</span>
+                              </div>
+                              <p className="text-xl font-bold text-light">{currentMonthTotalExercises}</p>
+                              <p className="text-[10px] text-light-dark mt-0.5">total planned</p>
+                            </div>
+                            
+                            <div className="bg-dark/30 backdrop-blur-sm rounded-lg p-3">
+                              <div className="flex items-center mb-2">
+                                <Clock size={14} className="text-secondary mr-1.5" />
+                                <span className="text-xs text-light-dark">Duration</span>
+                              </div>
+                              <p className="text-xl font-bold text-light">{currentMonthRemainingDuration}</p>
+                              <p className="text-[10px] text-light-dark mt-0.5">mins remaining</p>
+                            </div>
+                          </div>
+                          
+                          {currentMonthCompletionPercentage === 100 && (
+                            <div className="mt-4 text-sm text-green-400 flex items-center justify-center bg-green-500/10 p-2 rounded-lg">
+                              <CheckCircle size={16} className="mr-2" />
+                              Excellent! You've completed all exercises this month.
+                            </div>
+                          )}
+                          
+                          {currentMonthCompletionPercentage >= 75 && currentMonthCompletionPercentage < 100 && (
+                            <div className="mt-4 text-sm text-primary flex items-center justify-center bg-primary/10 p-2 rounded-lg">
+                              <Activity size={16} className="mr-2" />
+                              Almost there! Just a few more exercises to go.
+                            </div>
+                          )}
+                          
+                          {currentMonthCompletionPercentage >= 50 && currentMonthCompletionPercentage < 75 && (
+                            <div className="mt-4 text-sm text-yellow-400 flex items-center justify-center bg-yellow-500/10 p-2 rounded-lg">
+                              <Activity size={16} className="mr-2" />
+                              Good progress! Keep up the momentum.
+                            </div>
+                          )}
+                          
+                          {currentMonthCompletionPercentage > 0 && currentMonthCompletionPercentage < 50 && (
+                            <div className="mt-4 text-sm text-orange-400 flex items-center justify-center bg-orange-500/10 p-2 rounded-lg">
+                              <Activity size={16} className="mr-2" />
+                              You've started! Keep pushing forward.
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm sm:text-base text-light font-medium">View Workouts</p>
-                        <p className="text-[10px] sm:text-sm text-light-dark">See all planned workouts</p>
-                      </div>
-                    </Link>
-                    
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-light-dark mb-4">No workouts scheduled for this month</p>
                     <Link 
                       to="/create-plan" 
-                      className="bg-dark hover:bg-dark-light transition-colors flex items-center p-3 sm:p-4 rounded-lg sm:rounded-xl border border-white/5 hover:border-secondary/20"
+                      className="bg-instagram-gradient text-white text-sm px-4 py-2 rounded-xl inline-flex items-center"
                     >
-                      <div className="bg-secondary/10 w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center mr-3">
-                        <Calendar size={16} className="text-secondary sm:hidden" />
-                        <Calendar size={20} className="text-secondary hidden sm:block" />
-                      </div>
-                      <div>
-                        <p className="text-sm sm:text-base text-light font-medium">Create Plan</p>
-                        <p className="text-[10px] sm:text-sm text-light-dark">Plan new workouts</p>
-                      </div>
+                      <Plus size={16} className="mr-2" />
+                      Create a Plan
                     </Link>
                   </div>
+                  )}
                 </div>
               </div>
             </div>
