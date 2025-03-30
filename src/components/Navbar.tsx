@@ -1,20 +1,38 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LogOut, User, ChevronDown } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const Navbar: React.FC = () => {
   const { isAuthenticated, logout, user, isLoading } = useAuth();
   const location = useLocation();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  const handleScroll = () => {
+    setScrolled(window.scrollY > 0);
+  };
+  
+  useEffect(() => {
+    window.addEventListener('scroll', handleScroll);
+    handleScroll(); // Check initial state
+    
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
 
   return (
-    <nav className="bg-dark-light/90 backdrop-blur-md shadow-lg sticky top-0 z-50 border-b border-dark/20">
+    <nav
+      className={`fixed top-0 left-0 right-0 bg-dark-light/95 backdrop-blur-md z-50 select-none border-b border-dark/20 transition-all duration-200 ${
+        scrolled ? 'shadow-md py-1' : 'py-2'
+      }`}
+    >
       <div className="container mx-auto px-4 py-3">
         <div className="flex justify-between items-center">
           <Link 
             to={isAuthenticated ? "/dashboard" : "/"} 
-            className="flex items-center space-x-2 group"
+            className="flex items-center space-x-2 group select-none"
             onClick={() => window.scrollTo(0, 0)}
           >
             <span className="logo-text text-2xl md:text-3xl text-primary transition-all duration-300 group-hover:text-primary-light">Puulup</span>
