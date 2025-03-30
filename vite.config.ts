@@ -50,8 +50,8 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': {
-        target: 'https://karyde.com/gym',
+      '/gym/api': {
+        target: 'https://karyde.com',
         changeOrigin: true,
         secure: true,
       }
