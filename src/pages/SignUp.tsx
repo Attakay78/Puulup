@@ -102,8 +102,8 @@ const SignUp: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-dark flex flex-col justify-center py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+    <div className="flex-1 flex flex-col justify-center py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
+      <div className="w-full sm:mx-auto sm:max-w-md">
         <div className="flex justify-center">
           <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-instagram-gradient flex items-center justify-center">
             <Dumbbell className="h-7 w-7 sm:h-8 sm:w-8 text-white" />
@@ -120,7 +120,7 @@ const SignUp: React.FC = () => {
         </p>
       </div>
 
-      <div className="mt-6 sm:mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+      <div className="mt-6 sm:mt-8 w-full sm:mx-auto sm:max-w-md">
         <div className="card">
           <form className="space-y-4 sm:space-y-6" onSubmit={handleSubmit}>
             {errors.form && (

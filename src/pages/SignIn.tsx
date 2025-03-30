@@ -46,8 +46,8 @@ const SignIn: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 bg-dark flex flex-col justify-center px-4 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+    <div className="flex-1 flex flex-col justify-center items-center px-4 sm:px-6 lg:px-8">
+      <div className="w-full sm:mx-auto sm:max-w-md">
         <div className="flex justify-center">
           <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-instagram-gradient flex items-center justify-center">
             <Dumbbell className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
@@ -61,7 +61,7 @@ const SignIn: React.FC = () => {
         </p>
       </div>
 
-      <div className="mt-4 sm:mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+      <div className="mt-4 sm:mt-8 w-full sm:mx-auto sm:max-w-md">
         <div className="card">
           {message && (
             <div className="mb-3 sm:mb-6 bg-green-900 bg-opacity-20 border border-green-500 text-green-400 px-3 py-2 rounded-xl text-xs">

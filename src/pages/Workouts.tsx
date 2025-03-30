@@ -118,8 +118,8 @@ const Workouts: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-dark">
-      {/* Fixed header with title and new workout button */}
-      <div className="fixed top-0 left-0 right-0 z-40 bg-dark pt-16 pb-4 shadow-md">
+      {/* Secondary header - changed from fixed to sticky */}
+      <div className="sticky top-16 md:top-20 left-0 right-0 z-30 bg-dark pt-4 pb-4 shadow-md">
         <div className="container mx-auto px-3 sm:px-4">
           <div className="flex justify-between items-center">
             <div>
@@ -141,8 +141,8 @@ const Workouts: React.FC = () => {
         </div>
       </div>
 
-      {/* Main content with padding for fixed header */}
-      <div className="pt-36 pb-20">
+      {/* Main content with adjusted padding */}
+      <div className="py-6">
         <div className="container mx-auto px-3 sm:px-4">
           {error && (
             <div className="mb-6 bg-red-900 bg-opacity-20 border border-red-500 text-red-400 px-4 py-3 rounded-xl">

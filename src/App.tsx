@@ -51,7 +51,7 @@ const AppContent: React.FC = () => {
     <div className="min-h-screen flex flex-col">
       <ScrollToTop />
       <Navbar />
-      <main className={`flex-grow pt-16 md:pt-20 ${isAuthenticated && isSmallScreen ? 'pb-16' : ''}`}>
+      <main className={`flex-grow pt-16 md:pt-20 ${isAuthenticated && isSmallScreen ? 'pb-16' : ''} ${pathname === '/signin' || pathname === '/signup' ? 'flex flex-col' : ''}`}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/signup" element={<SignUp />} />
@@ -96,48 +96,57 @@ const AppContent: React.FC = () => {
           <div className="flex justify-around">
             <Link 
               to="/dashboard" 
-              className={`flex flex-col items-center justify-center py-3 px-4 ${
+              className={`flex flex-col items-center justify-center py-3 px-4 relative ${
                 pathname === '/dashboard' 
-                  ? 'text-primary font-medium bg-primary/10 rounded-t-lg transition-colors' 
-                  : 'text-light-dark hover:text-light hover:bg-dark-light/50 active:bg-dark-light/70 rounded-t-lg transition-colors'
+                  ? 'text-primary font-medium transition-colors' 
+                  : 'text-light-dark hover:text-light active:text-primary transition-colors'
               }`}
             >
-              <LayoutDashboard size={22} />
-              <span className="text-xs mt-1">Dashboard</span>
+              <LayoutDashboard 
+                size={22} 
+                className={`transition-transform duration-200 ${pathname === '/dashboard' ? 'scale-110' : ''}`}
+              />
+              <span className={`text-xs mt-1 transition-all duration-200 ${pathname === '/dashboard' ? 'font-medium' : ''}`}>Dashboard</span>
             </Link>
             
             <Link 
               to="/workouts" 
-              className={`flex flex-col items-center justify-center py-3 px-4 ${
+              className={`flex flex-col items-center justify-center py-3 px-4 relative ${
                 pathname === '/workouts' 
-                  ? 'text-primary font-medium bg-primary/10 rounded-t-lg transition-colors' 
-                  : 'text-light-dark hover:text-light hover:bg-dark-light/50 active:bg-dark-light/70 rounded-t-lg transition-colors'
+                  ? 'text-primary font-medium transition-colors' 
+                  : 'text-light-dark hover:text-light active:text-primary transition-colors'
               }`}
             >
-              <Dumbbell size={22} />
-              <span className="text-xs mt-1">Workouts</span>
+              <Dumbbell 
+                size={22} 
+                className={`transition-transform duration-200 ${pathname === '/workouts' ? 'scale-110' : ''}`}
+              />
+              <span className={`text-xs mt-1 transition-all duration-200 ${pathname === '/workouts' ? 'font-medium' : ''}`}>Workouts</span>
             </Link>
             
             <Link 
               to="/profile" 
-              className={`flex flex-col items-center justify-center py-3 px-4 ${
+              className={`flex flex-col items-center justify-center py-3 px-4 relative ${
                 pathname === '/profile' 
-                  ? 'text-primary font-medium bg-primary/10 rounded-t-lg transition-colors' 
-                  : 'text-light-dark hover:text-light hover:bg-dark-light/50 active:bg-dark-light/70 rounded-t-lg transition-colors'
+                  ? 'text-primary font-medium transition-colors' 
+                  : 'text-light-dark hover:text-light active:text-primary transition-colors'
               }`}
             >
-              <User size={22} />
-              <span className="text-xs mt-1">Profile</span>
+              <User 
+                size={22} 
+                className={`transition-transform duration-200 ${pathname === '/profile' ? 'scale-110' : ''}`}
+              />
+              <span className={`text-xs mt-1 transition-all duration-200 ${pathname === '/profile' ? 'font-medium' : ''}`}>Profile</span>
             </Link>
           </div>
         </div>
       )}
-      <footer className="bg-dark-light/95 backdrop-blur-sm text-light py-4 border-t border-dark/20 shadow-top">
+      <footer className={`bg-dark-light/95 backdrop-blur-sm text-light py-4 border-t border-dark/20 shadow-top select-none mt-auto ${isAuthenticated && isSmallScreen ? 'pb-16' : ''}`}>
         <div className="container mx-auto px-4 text-center">
           <div className="flex items-center justify-center mb-2">
-            <span className="logo-text text-xl text-primary">PuulUp</span>
+            <span className="logo-text text-2xl text-primary select-none">Puulup</span>
           </div>
-          <p className="text-light-dark text-xs">&copy; {new Date().getFullYear()} PuulUp. All rights reserved.</p>
+          <p className="text-light-dark text-xs">&copy; {new Date().getFullYear()} Puulup. All rights reserved.</p>
         </div>
       </footer>
     </div>
